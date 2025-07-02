@@ -18,7 +18,7 @@
     not proc.name in (python, python3) and
     not container.name in (ai-trading-bot, dashboard-backend)
   output: >
-    Financial PII file access detected 
+    Financial PII file access detected
     (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
   priority: ALERT
   tags: [financial, pii, compliance]
@@ -35,7 +35,7 @@
      proc.args contains "mnemonic") and
     not container.name in (ai-trading-bot, bluefin-service)
   output: >
-    Potential cryptocurrency private key exposure 
+    Potential cryptocurrency private key exposure
     (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [financial, crypto, private-key]
@@ -53,7 +53,7 @@
     fd.rip_name in (api.coinbase.com, api.bluefin.trade) and
     fd.rport in (80, 443)
   output: >
-    High frequency API call detected 
+    High frequency API call detected
     (user=%user.name connection=%fd.rip:%fd.rport container=%container.name image=%container.image.repository)
   priority: WARNING
   tags: [financial, api, high-frequency]
@@ -71,7 +71,7 @@
      fd.name contains ".env") and
     container.name in (ai-trading-bot, bluefin-service)
   output: >
-    Trading API key rotation detected 
+    Trading API key rotation detected
     (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
   priority: INFORMATIONAL
   tags: [financial, api-key, rotation]
@@ -89,7 +89,7 @@
      fd.rip_name contains "dydx") and
     not fd.rip_name in (api.coinbase.com, api.bluefin.trade)
   output: >
-    Connection to unauthorized trading API 
+    Connection to unauthorized trading API
     (user=%user.name connection=%fd.rip:%fd.rport api=%fd.rip_name container=%container.name image=%container.image.repository)
   priority: WARNING
   tags: [financial, api, unauthorized]
@@ -110,7 +110,7 @@
     not proc.name in (python, python3) and
     not container.name in (ai-trading-bot, bluefin-service)
   output: >
-    Market data feed manipulation detected 
+    Market data feed manipulation detected
     (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [financial, market-data, manipulation]
@@ -123,7 +123,7 @@
     fd.name contains "oracle" and
     not container.name="ai-trading-bot"
   output: >
-    Price oracle tampering attempt 
+    Price oracle tampering attempt
     (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [financial, oracle, tampering]
@@ -147,7 +147,7 @@
      proc.args contains "disable") and
     container.name="ai-trading-bot"
   output: >
-    Risk limit bypass attempt 
+    Risk limit bypass attempt
     (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [financial, risk-management, bypass]
@@ -163,7 +163,7 @@
     not proc.name in (python, python3) and
     not container.name="ai-trading-bot"
   output: >
-    Position size manipulation detected 
+    Position size manipulation detected
     (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [financial, position, manipulation]
@@ -184,7 +184,7 @@
      proc.args contains "layering" or
      proc.args contains "fake_order")
   output: >
-    Potential market manipulation pattern detected 
+    Potential market manipulation pattern detected
     (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [financial, manipulation, compliance]
@@ -199,7 +199,7 @@
      proc.args contains "submit_order" or
      proc.args contains "create_order")
   output: >
-    Order placement activity 
+    Order placement activity
     (user=%user.name command=%proc.cmdline timestamp=%evt.time container=%container.name image=%container.image.repository)
   priority: INFORMATIONAL
   tags: [financial, order, audit]
@@ -214,7 +214,7 @@
      proc.args contains "material_info" or
      proc.args contains "non_public")
   output: >
-    Insider trading prevention bypass attempt 
+    Insider trading prevention bypass attempt
     (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [financial, insider-trading, compliance]
@@ -234,7 +234,7 @@
       proc.args contains "manipulate" or
       proc.args contains "flash_loan"))
   output: >
-    Liquidity manipulation attempt 
+    Liquidity manipulation attempt
     (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [financial, liquidity, manipulation]
@@ -250,7 +250,7 @@
      proc.args contains "front_run" or
      proc.args contains "sandwich")
   output: >
-    Abnormal slippage pattern detected 
+    Abnormal slippage pattern detected
     (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: WARNING
   tags: [financial, slippage, front-running]
@@ -270,7 +270,7 @@
      fd.rip_name contains "sui") and
     fd.rport in (80, 443, 8080, 9000)
   output: >
-    Smart contract interaction detected 
+    Smart contract interaction detected
     (user=%user.name connection=%fd.rip:%fd.rport container=%container.name image=%container.image.repository)
   priority: INFORMATIONAL
   tags: [financial, smart-contract, defi]
@@ -285,7 +285,7 @@
      proc.args contains "recursive_call" or
      proc.args contains "callback_loop")
   output: >
-    Potential reentrancy attack pattern 
+    Potential reentrancy attack pattern
     (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [financial, reentrancy, defi]
@@ -307,7 +307,7 @@
     not proc.name in (python, python3) and
     not container.name="ai-trading-bot"
   output: >
-    ML model poisoning attempt detected 
+    ML model poisoning attempt detected
     (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [financial, ml, poisoning]
@@ -324,7 +324,7 @@
     not container.name in (ai-trading-bot, dashboard-backend) and
     not proc.name in (python, python3)
   output: >
-    Trading strategy file access 
+    Trading strategy file access
     (user=%user.name command=%proc.cmdline file=%fd.name access=%evt.type container=%container.name image=%container.image.repository)
   priority: WARNING
   tags: [financial, strategy, leakage]
@@ -345,7 +345,7 @@
      fd.rip_name contains "curve") and
     not proc.args contains "authorized_arbitrage"
   output: >
-    Unauthorized cross-exchange activity 
+    Unauthorized cross-exchange activity
     (user=%user.name connection=%fd.rip:%fd.rport exchange=%fd.rip_name container=%container.name image=%container.image.repository)
   priority: WARNING
   tags: [financial, cross-exchange, unauthorized]
@@ -365,7 +365,7 @@
       proc.args contains "live" or
       proc.args contains "real_money"))
   output: >
-    Stress testing abuse detected 
+    Stress testing abuse detected
     (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [financial, stress-test, abuse]
@@ -380,14 +380,14 @@
   condition: >
     outbound and
     container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
-    not fd.rip_name in (api.coinbase.com, api.bluefin.trade, api.openai.com, 
+    not fd.rip_name in (api.coinbase.com, api.bluefin.trade, api.openai.com,
                         slack.com, discord.com, telegram.org) and
     not fd.rip startswith "172." and
     not fd.rip startswith "10." and
     not fd.rip="127.0.0.1" and
     fd.rport in (80, 443, 21, 22, 25, 587, 993, 995)
   output: >
-    Potential financial data exfiltration 
+    Potential financial data exfiltration
     (user=%user.name connection=%fd.rip:%fd.rport protocol=%fd.rport container=%container.name image=%container.image.repository)
   priority: ALERT
   tags: [financial, exfiltration, data]
@@ -405,7 +405,7 @@
     not container.name in (ai-trading-bot, dashboard-backend) and
     not proc.name in (python, python3)
   output: >
-    Unauthorized financial report generation 
+    Unauthorized financial report generation
     (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
   priority: WARNING
   tags: [financial, reporting, unauthorized]
@@ -426,7 +426,7 @@
      proc.args contains "SELL" or
      proc.args contains "HOLD")
   output: >
-    Real-time trading decision 
+    Real-time trading decision
     (user=%user.name command=%proc.cmdline decision=%proc.args container=%container.name image=%container.image.repository)
   priority: INFORMATIONAL
   tags: [financial, trading, real-time]
@@ -441,7 +441,7 @@
      proc.args contains "circuit_breaker" or
      proc.args contains "kill_switch")
   output: >
-    Emergency stop mechanism activated 
+    Emergency stop mechanism activated
     (user=%user.name command=%proc.cmdline reason=%proc.args container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [financial, emergency-stop, safety]

@@ -16,7 +16,8 @@ from bot.exchange.bluefin_service_client import (
 from bot.mcp.omnisearch_client import OmniSearchClient
 from bot.utils.logger_factory import get_logger
 from bot.utils.typed_config import get_typed
-from bot.websocket_publisher import WebSocketPublisher
+
+# WebSocket publisher removed
 
 logger = get_logger(__name__)
 
@@ -44,25 +45,11 @@ class ServiceStartupManager:
 
         # Define service dependencies and requirements
         self.services_config = {
-            "websocket_publisher": {
-                "required": False,
-                "enabled": getattr(
-                    settings.system, "enable_websocket_publishing", True
-                ),
-                "startup_delay": 5.0,  # Extra delay for dashboard to be ready
-                "max_wait": 30.0,
-            },
             "bluefin_service": {
                 "required": settings.exchange.exchange_type == "bluefin",
                 "enabled": settings.exchange.exchange_type == "bluefin",
                 "startup_delay": 3.0,
                 "max_wait": 20.0,
-            },
-            "mcp_memory": {
-                "required": False,
-                "enabled": getattr(settings.system, "mcp_enabled", False),
-                "startup_delay": 2.0,
-                "max_wait": 15.0,
             },
             "omnisearch": {
                 "required": False,
@@ -136,12 +123,8 @@ class ServiceStartupManager:
         logger.info("Starting %s service...", service_name)
 
         try:
-            if service_name == "websocket_publisher":
-                instance = await self._start_websocket_publisher(max_wait)
-            elif service_name == "bluefin_service":
+            if service_name == "bluefin_service":
                 instance = await self._start_bluefin_service(max_wait)
-            elif service_name == "mcp_memory":
-                instance = await self._start_mcp_memory(max_wait)
             elif service_name == "omnisearch":
                 instance = await self._start_omnisearch(max_wait)
             else:
@@ -170,49 +153,6 @@ class ServiceStartupManager:
             )
             return None
 
-    async def _start_websocket_publisher(
-        self, timeout: float
-    ) -> WebSocketPublisher | None:
-        """Start WebSocket publisher with timeout."""
-        try:
-            publisher = WebSocketPublisher(self.settings)
-
-            # Initialize with timeout - will always return True now (either connected or null mode)
-            async with asyncio.timeout(timeout):
-                success = await publisher.initialize()
-
-                if success:
-                    # Check if actually connected or in null mode
-                    if publisher.connected:
-                        logger.info("WebSocket publisher connected successfully")
-                    else:
-                        logger.info(
-                            "WebSocket publisher in offline mode (dashboard unavailable)"
-                        )
-                    return publisher
-
-                # This should not happen with new implementation
-                logger.warning("WebSocket publisher initialization returned False")
-                return None
-
-        except TimeoutError:
-            logger.warning(
-                "WebSocket publisher initialization timeout - using offline mode"
-            )
-            # Create publisher in null mode
-            publisher = WebSocketPublisher(self.settings)
-            publisher._enable_null_publisher_mode()
-            return publisher
-        except Exception as e:
-            logger.warning(
-                "WebSocket publisher initialization error: %s - using offline mode",
-                str(e),
-            )
-            # Create publisher in null mode
-            publisher = WebSocketPublisher(self.settings)
-            publisher._enable_null_publisher_mode()
-            return publisher
-
     async def _start_bluefin_service(
         self, timeout: float
     ) -> BluefinServiceClient | None:
@@ -233,34 +173,6 @@ class ServiceStartupManager:
             raise
         except Exception as e:
             logger.warning("Bluefin service connection error: %s", str(e))
-            raise
-
-    async def _start_mcp_memory(self, timeout: float) -> Any | None:
-        """Start MCP memory service with timeout."""
-        try:
-            # MCP memory is handled by the memory-enhanced agent
-            # Just check if the service is reachable
-            import aiohttp
-
-            mcp_url = getattr(
-                self.settings.system, "mcp_server_url", "http://mcp-memory:8765"
-            )
-
-            async with asyncio.timeout(timeout):
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(f"{mcp_url}/health") as response:
-                        if response.status == 200:
-                            logger.info("MCP memory service is healthy")
-                            return True
-                        raise Exception(
-                            f"MCP memory service unhealthy: status={response.status}"
-                        )
-
-        except TimeoutError:
-            logger.warning("MCP memory service connection timeout")
-            raise
-        except Exception as e:
-            logger.warning("MCP memory service connection error: %s", str(e))
             raise
 
     async def _start_omnisearch(self, timeout: float) -> OmniSearchClient | None:

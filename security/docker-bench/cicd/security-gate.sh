@@ -80,10 +80,10 @@ create_gate_report() {
     local gate_result="$1"
     local scan_report="$2"
     local remediation_report="$3"
-    
+
     local timestamp=$(date '+%Y%m%d_%H%M%S')
     local gate_report="${LOGS_DIR}/security-gate-${BUILD_ID}-${timestamp}.json"
-    
+
     cat > "$gate_report" << EOF
 {
     "timestamp": "$(date -Iseconds)",
@@ -134,11 +134,11 @@ EOF
 send_security_notification() {
     local gate_result="$1"
     local gate_report="$2"
-    
+
     local notification_title="Security Gate $gate_result"
     local notification_color
     local notification_priority
-    
+
     case "$gate_result" in
         "PASSED")
             notification_color="good"
@@ -157,9 +157,9 @@ send_security_notification() {
             notification_priority="medium"
             ;;
     esac
-    
+
     local message="Build: $BUILD_ID | Branch: $BRANCH_NAME | Critical: $CRITICAL_ISSUES | High: $HIGH_ISSUES"
-    
+
     # Send to Slack
     if [ -n "$SLACK_SECURITY_CHANNEL" ]; then
         local slack_payload=$(cat << EOF
@@ -216,14 +216,14 @@ send_security_notification() {
 }
 EOF
 )
-        
+
         if [ -n "$SECURITY_WEBHOOK_URL" ]; then
             curl -s -X POST "$SECURITY_WEBHOOK_URL" \
                 -H "Content-Type: application/json" \
                 -d "$slack_payload" || warning "Failed to send Slack notification"
         fi
     fi
-    
+
     # Send to Microsoft Teams
     if [ -n "$TEAMS_WEBHOOK_URL" ]; then
         local teams_payload=$(cat << EOF
@@ -275,22 +275,22 @@ EOF
 }
 EOF
 )
-        
+
         curl -s -X POST "$TEAMS_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -d "$teams_payload" || warning "Failed to send Teams notification"
     fi
-    
+
     info "Security gate notification sent: $gate_result"
 }
 
 # Pre-deployment security checks
 run_predeploy_checks() {
     info "Running pre-deployment security checks..."
-    
+
     local checks_passed=0
     local checks_failed=0
-    
+
     # Check 1: Ensure Docker is running
     if ! docker info &> /dev/null; then
         error "Docker daemon is not running"
@@ -299,7 +299,7 @@ run_predeploy_checks() {
         success "Docker daemon is accessible"
         checks_passed=$((checks_passed + 1))
     fi
-    
+
     # Check 2: Verify Docker Bench Security is available
     if [ ! -f "${BASE_DIR}/docker-bench-security/docker-bench-security.sh" ]; then
         error "Docker Bench Security not found"
@@ -308,7 +308,7 @@ run_predeploy_checks() {
         success "Docker Bench Security is available"
         checks_passed=$((checks_passed + 1))
     fi
-    
+
     # Check 3: Validate configuration files
     local compose_files=("${PROJECT_ROOT}/docker-compose.yml")
     for compose_file in "${compose_files[@]}"; do
@@ -324,7 +324,7 @@ run_predeploy_checks() {
             warning "Docker Compose file not found: $(basename "$compose_file")"
         fi
     done
-    
+
     # Check 4: Verify security policies exist
     if [ -f "${BASE_DIR}/config/docker-bench.conf" ]; then
         success "Security policies configuration found"
@@ -332,9 +332,9 @@ run_predeploy_checks() {
     else
         warning "Security policies not configured"
     fi
-    
+
     info "Pre-deployment checks completed: $checks_passed passed, $checks_failed failed"
-    
+
     if [ $checks_failed -gt 0 ]; then
         return 1
     else
@@ -345,10 +345,10 @@ run_predeploy_checks() {
 # Run comprehensive security scan
 run_security_scan() {
     info "Running comprehensive security scan..."
-    
+
     local scan_start_time=$(date +%s)
     local scan_report=""
-    
+
     # Set timeout for security scan
     timeout $SECURITY_SCAN_TIMEOUT "${BASE_DIR}/scripts/run-security-scan.sh" > /dev/null 2>&1 || {
         local exit_code=$?
@@ -359,15 +359,15 @@ run_security_scan() {
         fi
         return 1
     }
-    
+
     # Get the latest scan report
     scan_report=$(ls -t "${BASE_DIR}/reports"/security-analysis-*.json 2>/dev/null | head -1)
-    
+
     if [ -z "$scan_report" ] || [ ! -f "$scan_report" ]; then
         error "Security scan report not found"
         return 1
     fi
-    
+
     # Parse scan results
     if command -v jq &> /dev/null; then
         CRITICAL_ISSUES=$(jq -r '.summary.critical_issues // 0' "$scan_report")
@@ -376,45 +376,45 @@ run_security_scan() {
         LOW_ISSUES=$(jq -r '.summary.low_issues // 0' "$scan_report")
         SECURITY_ISSUES_FOUND=$((CRITICAL_ISSUES + HIGH_ISSUES + MEDIUM_ISSUES + LOW_ISSUES))
     fi
-    
+
     local scan_duration=$(($(date +%s) - scan_start_time))
     success "Security scan completed in ${scan_duration}s - Issues: Critical=$CRITICAL_ISSUES, High=$HIGH_ISSUES, Medium=$MEDIUM_ISSUES, Low=$LOW_ISSUES"
-    
+
     echo "$scan_report"
 }
 
 # Apply automated remediation
 run_automated_remediation() {
     local scan_report="$1"
-    
+
     info "Running automated remediation..."
-    
+
     if [ "$ENABLE_AUTO_REMEDIATION" != "true" ]; then
         info "Automated remediation disabled"
         return 0
     fi
-    
+
     if [ $CRITICAL_ISSUES -eq 0 ] && [ $HIGH_ISSUES -eq 0 ]; then
         info "No critical or high issues found - skipping remediation"
         return 0
     fi
-    
+
     local remediation_start_time=$(date +%s)
     local remediation_report=""
-    
+
     # Run remediation with timeout
     if timeout $REMEDIATION_TIMEOUT "${BASE_DIR}/remediation/auto-remediate.sh" "$scan_report" > /dev/null 2>&1; then
         local remediation_duration=$(($(date +%s) - remediation_start_time))
         success "Automated remediation completed in ${remediation_duration}s"
-        
+
         # Get remediation report
         remediation_report=$(ls -t "${BASE_DIR}/logs"/remediation.log 2>/dev/null | head -1)
-        
+
         # Re-run security scan to verify fixes
         info "Re-running security scan to verify remediation..."
         local post_remediation_scan
         post_remediation_scan=$(run_security_scan)
-        
+
         if [ -n "$post_remediation_scan" ]; then
             info "Post-remediation scan completed"
         fi
@@ -426,16 +426,16 @@ run_automated_remediation() {
             warning "Automated remediation failed with exit code: $exit_code"
         fi
     fi
-    
+
     echo "$remediation_report"
 }
 
 # Evaluate security gate
 evaluate_security_gate() {
     local scan_report="$1"
-    
+
     info "Evaluating security gate with mode: $GATE_MODE"
-    
+
     # In disabled mode, always pass
     if [ "$GATE_MODE" = "disabled" ]; then
         GATE_STATUS="BYPASSED"
@@ -443,18 +443,18 @@ evaluate_security_gate() {
         success "Security gate bypassed (disabled mode)"
         return 0
     fi
-    
+
     # Evaluate critical issues
     if [ "$FAIL_ON_CRITICAL" = "true" ] && [ $CRITICAL_ISSUES -gt $MAX_CRITICAL_ISSUES ]; then
         GATE_STATUS="FAILED"
         GATE_DETAILS="Critical security issues found: $CRITICAL_ISSUES (max allowed: $MAX_CRITICAL_ISSUES)"
         error "$GATE_DETAILS"
-        
+
         if [ "$GATE_MODE" = "enforcing" ]; then
             return 1
         fi
     fi
-    
+
     # Evaluate high issues
     if [ "$FAIL_ON_HIGH" = "true" ] && [ $HIGH_ISSUES -gt $MAX_HIGH_ISSUES ]; then
         if [ "$GATE_STATUS" != "FAILED" ]; then
@@ -462,12 +462,12 @@ evaluate_security_gate() {
             GATE_DETAILS="High severity security issues found: $HIGH_ISSUES (max allowed: $MAX_HIGH_ISSUES)"
         fi
         error "High severity security issues found: $HIGH_ISSUES (max allowed: $MAX_HIGH_ISSUES)"
-        
+
         if [ "$GATE_MODE" = "enforcing" ]; then
             return 1
         fi
     fi
-    
+
     # Evaluate medium issues (warning only)
     if [ $MEDIUM_ISSUES -gt $MAX_MEDIUM_ISSUES ]; then
         if [ "$GATE_STATUS" != "FAILED" ]; then
@@ -476,7 +476,7 @@ evaluate_security_gate() {
         fi
         warning "Medium severity security issues found: $MEDIUM_ISSUES (recommended max: $MAX_MEDIUM_ISSUES)"
     fi
-    
+
     # If no issues found, gate passes
     if [ "$GATE_STATUS" = "UNKNOWN" ]; then
         GATE_STATUS="PASSED"
@@ -485,23 +485,23 @@ evaluate_security_gate() {
     elif [ "$GATE_STATUS" = "WARNING" ]; then
         warning "Security gate passed with warnings"
     fi
-    
+
     return 0
 }
 
 # Main security gate execution
 main() {
     local gate_start_time=$(date +%s)
-    
+
     info "Starting security gate for AI Trading Bot"
     info "Build ID: $BUILD_ID | Branch: $BRANCH_NAME | Mode: $GATE_MODE"
-    
+
     # Run pre-deployment checks
     if ! run_predeploy_checks; then
         error "Pre-deployment checks failed"
         exit 1
     fi
-    
+
     # Run security scan
     local scan_report
     if ! scan_report=$(run_security_scan); then
@@ -514,7 +514,7 @@ main() {
         if [ $CRITICAL_ISSUES -gt 0 ] || [ $HIGH_ISSUES -gt 0 ]; then
             remediation_report=$(run_automated_remediation "$scan_report")
         fi
-        
+
         # Evaluate security gate
         if ! evaluate_security_gate "$scan_report"; then
             if [ "$GATE_MODE" = "enforcing" ]; then
@@ -523,17 +523,17 @@ main() {
                 warning "Security gate evaluation failed in permissive mode"
             fi
         fi
-        
+
         # Create gate report
         local gate_report
         gate_report=$(create_gate_report "$GATE_STATUS" "$scan_report" "$remediation_report")
-        
+
         # Send notifications
         send_security_notification "$GATE_STATUS" "$gate_report"
     fi
-    
+
     local gate_duration=$(($(date +%s) - gate_start_time))
-    
+
     # Final gate decision
     case "$GATE_STATUS" in
         "PASSED")

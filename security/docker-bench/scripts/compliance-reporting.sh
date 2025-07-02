@@ -56,24 +56,24 @@ mkdir -p "$REPORTS_DIR" "$TEMPLATES_DIR" "$LOGS_DIR"
 # Collect current security status
 collect_current_status() {
     local output_file="$1"
-    
+
     info "Collecting current security status..."
-    
+
     # Get latest security scan results
     local latest_scan
     latest_scan=$(ls -t "$REPORTS_DIR"/security-analysis-*.json 2>/dev/null | head -1)
-    
+
     if [ -z "$latest_scan" ] || [ ! -f "$latest_scan" ]; then
         warning "No recent security scan found - running new scan"
         "${SCRIPT_DIR}/run-security-scan.sh" > /dev/null
         latest_scan=$(ls -t "$REPORTS_DIR"/security-analysis-*.json 2>/dev/null | head -1)
     fi
-    
+
     local current_status="{}"
     if [ -f "$latest_scan" ] && command -v jq &> /dev/null; then
         current_status=$(jq '.' "$latest_scan")
     fi
-    
+
     echo "$current_status" > "$output_file"
     success "Current security status collected"
 }
@@ -82,22 +82,22 @@ collect_current_status() {
 collect_historical_data() {
     local output_file="$1"
     local days="$2"
-    
+
     info "Collecting historical data for last $days days..."
-    
+
     local historical_data="[]"
-    
+
     # Find all analysis files within the specified time range
     local cutoff_date
     cutoff_date=$(date -d "$days days ago" '+%Y%m%d')
-    
+
     if command -v jq &> /dev/null; then
         for analysis_file in "$REPORTS_DIR"/security-analysis-*.json; do
             if [ -f "$analysis_file" ]; then
                 # Extract date from filename
                 local file_date
                 file_date=$(basename "$analysis_file" | grep -o '[0-9]\{8\}' | head -1)
-                
+
                 if [ -n "$file_date" ] && [ "$file_date" -ge "$cutoff_date" ]; then
                     local scan_data
                     scan_data=$(jq ". + {\"scan_date\": \"$file_date\"}" "$analysis_file" 2>/dev/null || echo "{}")
@@ -106,7 +106,7 @@ collect_historical_data() {
             fi
         done
     fi
-    
+
     echo "$historical_data" > "$output_file"
     success "Historical data collected ($(echo "$historical_data" | jq length) scans)"
 }
@@ -115,81 +115,81 @@ collect_historical_data() {
 calculate_compliance_scores() {
     local current_status_file="$1"
     local output_file="$2"
-    
+
     info "Calculating compliance scores..."
-    
+
     if ! command -v jq &> /dev/null; then
         echo '{"error": "jq not available for compliance calculation"}' > "$output_file"
         return 1
     fi
-    
+
     local current_status
     current_status=$(cat "$current_status_file")
-    
+
     # CIS Docker Benchmark compliance
     local cis_total_checks
     local cis_passed_checks
     local cis_critical_failures
     local cis_high_failures
-    
+
     cis_total_checks=$(echo "$current_status" | jq -r '.summary.total_checks // 0')
     cis_passed_checks=$(echo "$current_status" | jq -r '.summary.passed_checks // 0')
     cis_critical_failures=$(echo "$current_status" | jq -r '.summary.critical_issues // 0')
     cis_high_failures=$(echo "$current_status" | jq -r '.summary.high_issues // 0')
-    
+
     local cis_score=0
     if [ "$cis_total_checks" -gt 0 ]; then
         cis_score=$(( cis_passed_checks * 100 / cis_total_checks ))
     fi
-    
+
     # NIST Cybersecurity Framework alignment
     local nist_score=100
-    
+
     # Deduct points for critical issues (more severe penalty)
     nist_score=$(( nist_score - (cis_critical_failures * 25) ))
-    
+
     # Deduct points for high issues
     nist_score=$(( nist_score - (cis_high_failures * 10) ))
-    
+
     # Ensure score doesn't go below 0
     if [ "$nist_score" -lt 0 ]; then
         nist_score=0
     fi
-    
+
     # Trading-specific security score
     local trading_score=100
-    
+
     # Check for trading-specific security issues
     local containers_checked=0
     local containers_compliant=0
-    
+
     for container in ai-trading-bot bluefin-service dashboard-backend; do
         if docker ps -q -f name="$container" &> /dev/null; then
             containers_checked=$((containers_checked + 1))
-            
+
             # Check key security configurations
             local user_config
             local privileged_mode
             local readonly_fs
-            
+
             user_config=$(docker inspect "$container" --format '{{.Config.User}}' 2>/dev/null || echo "")
             privileged_mode=$(docker inspect "$container" --format '{{.HostConfig.Privileged}}' 2>/dev/null || echo "false")
             readonly_fs=$(docker inspect "$container" --format '{{.HostConfig.ReadonlyRootfs}}' 2>/dev/null || echo "false")
-            
+
             # Container is compliant if it has proper user, is not privileged, and has readonly fs
             if [ -n "$user_config" ] && [ "$user_config" != "root" ] && [ "$privileged_mode" = "false" ] && [ "$readonly_fs" = "true" ]; then
                 containers_compliant=$((containers_compliant + 1))
             fi
         fi
     done
-    
+
     if [ "$containers_checked" -gt 0 ]; then
         trading_score=$(( containers_compliant * 100 / containers_checked ))
     fi
-    
+
     # Overall security posture score (weighted average)
     local overall_score=$(( (cis_score * 40 + nist_score * 30 + trading_score * 30) / 100 ))
-    
+
     # Generate compliance report
     cat > "$output_file" << EOF
 {
@@ -244,17 +244,17 @@ EOF
 generate_trend_analysis() {
     local historical_data_file="$1"
     local output_file="$2"
-    
+
     info "Generating trend analysis..."
-    
+
     if ! command -v jq &> /dev/null; then
         echo '{"error": "jq not available for trend analysis"}' > "$output_file"
         return 1
     fi
-    
+
     local historical_data
     historical_data=$(cat "$historical_data_file")
-    
+
     # Calculate trends
     local trend_data
     trend_data=$(echo "$historical_data" | jq '
@@ -270,7 +270,7 @@ generate_trend_analysis() {
         }
     ] | sort_by(.date)
     ')
-    
+
     # Calculate trends and insights
     local trend_summary
     trend_summary=$(echo "$trend_data" | jq '
@@ -307,7 +307,7 @@ generate_trend_analysis() {
                     if (first.total_checks // 0) == 0 then "NO_DATA"
                     else
                         (
-                            (((last.passed_checks // 0) * 100 / (last.total_checks // 0)) - 
+                            (((last.passed_checks // 0) * 100 / (last.total_checks // 0)) -
                              ((first.passed_checks // 0) * 100 / (first.total_checks // 0))) |
                             if . > 5 then "IMPROVING"
                             elif . < -5 then "DEGRADING"
@@ -320,7 +320,7 @@ generate_trend_analysis() {
         }
     }
     ')
-    
+
     echo "$trend_summary" > "$output_file"
     success "Trend analysis generated"
 }
@@ -330,19 +330,19 @@ generate_executive_summary() {
     local compliance_scores_file="$1"
     local trend_analysis_file="$2"
     local output_file="$3"
-    
+
     info "Generating executive summary..."
-    
+
     if ! command -v jq &> /dev/null; then
         echo "Executive summary requires jq" > "$output_file"
         return 1
     fi
-    
+
     local compliance_data
     local trend_data
     compliance_data=$(cat "$compliance_scores_file")
     trend_data=$(cat "$trend_analysis_file")
-    
+
     # Generate executive summary
     cat > "$output_file" << 'EOF'
 # AI Trading Bot - Security Compliance Executive Summary
@@ -360,7 +360,7 @@ EOF
     overall_score=$(echo "$compliance_data" | jq -r '.compliance_scores.overall_security_posture.score')
     local overall_rating
     overall_rating=$(echo "$compliance_data" | jq -r '.compliance_scores.overall_security_posture.rating')
-    
+
     cat >> "$output_file" << EOF
 
 **Overall Security Score: ${overall_score}% (${overall_rating})**
@@ -369,64 +369,64 @@ EOF
 
     # Add compliance status for each standard
     echo "$compliance_data" | jq -r '
-    .compliance_scores | to_entries[] | 
+    .compliance_scores | to_entries[] |
     select(.key != "overall_security_posture") |
     "- **\(.key | gsub("_"; " ") | ascii_upcase)**: \(.value.score)% (\(.value.status))"
     ' >> "$output_file"
-    
+
     # Add trend information if available
     if [ -f "$trend_analysis_file" ]; then
         cat >> "$output_file" << 'EOF'
 
 ### Security Trends
 EOF
-        
+
         echo "$trend_data" | jq -r '
         .trends | to_entries[] |
         "- **\(.key | gsub("_"; " ") | ascii_upcase)**: \(.value.trend)"
         ' >> "$output_file"
     fi
-    
+
     # Add recommendations
     cat >> "$output_file" << 'EOF'
 
 ### Immediate Actions Required
 EOF
-    
+
     echo "$compliance_data" | jq -r '
     .recommendations[] | select(length > 0) | "- \(.)"
     ' >> "$output_file"
-    
+
     cat >> "$output_file" << 'EOF'
 
 ### Risk Assessment
 
 #### Critical Risks
 EOF
-    
+
     local critical_issues
     critical_issues=$(echo "$compliance_data" | jq -r '.compliance_scores.cis_docker_benchmark.critical_failures')
-    
+
     if [ "$critical_issues" -gt 0 ]; then
         echo "- **${critical_issues} critical security issues** require immediate attention" >> "$output_file"
     else
         echo "- No critical security issues identified" >> "$output_file"
     fi
-    
+
     cat >> "$output_file" << 'EOF'
 
 #### High Priority Risks
 EOF
-    
+
     local high_issues
     high_issues=$(echo "$compliance_data" | jq -r '.compliance_scores.cis_docker_benchmark.high_failures')
-    
+
     if [ "$high_issues" -gt 0 ]; then
         echo "- **${high_issues} high-severity issues** should be addressed within 24 hours" >> "$output_file"
     else
         echo "- No high-priority security issues identified" >> "$output_file"
     fi
-    
+
     cat >> "$output_file" << EOF
 
 ### Trading Bot Specific Security
@@ -435,14 +435,14 @@ The trading bot infrastructure has achieved a **$(echo "$compliance_data" | jq -
 
 **Container Security Status:**
 EOF
-    
+
     local containers_compliant
     local containers_checked
     containers_compliant=$(echo "$compliance_data" | jq -r '.compliance_scores.trading_security.containers_compliant')
     containers_checked=$(echo "$compliance_data" | jq -r '.compliance_scores.trading_security.containers_checked')
-    
+
     echo "- ${containers_compliant}/${containers_checked} trading containers meet security requirements" >> "$output_file"
-    
+
     cat >> "$output_file" << 'EOF'
 
 ### Next Steps
@@ -466,9 +466,9 @@ generate_html_report() {
     local trend_analysis_file="$2"
     local executive_summary_file="$3"
     local output_file="$4"
-    
+
     info "Generating HTML report..."
-    
+
     cat > "$output_file" << 'EOF'
 <!DOCTYPE html>
 <html lang="en">
@@ -614,14 +614,14 @@ generate_html_report() {
 
     <script>
         document.getElementById('report-date').textContent = new Date().toLocaleString();
-        
+
         // Load and display compliance data
         function loadComplianceData() {
             // This would normally load from the JSON files
             // For now, we'll add placeholder functionality
             console.log('Loading compliance data...');
         }
-        
+
         // Initialize report
         loadComplianceData();
     </script>
@@ -636,37 +636,37 @@ EOF
 generate_compliance_report() {
     local timestamp=$(date '+%Y%m%d_%H%M%S')
     local report_prefix="${REPORTS_DIR}/compliance-${timestamp}"
-    
+
     info "Starting compliance report generation..."
-    
+
     # Temporary files for data collection
     local current_status_file="${report_prefix}-current.json"
     local historical_data_file="${report_prefix}-historical.json"
     local compliance_scores_file="${report_prefix}-scores.json"
     local trend_analysis_file="${report_prefix}-trends.json"
     local executive_summary_file="${report_prefix}-summary.md"
-    
+
     # Collect data
     collect_current_status "$current_status_file"
-    
+
     if [ "$TREND_ANALYSIS_ENABLED" = "true" ]; then
         collect_historical_data "$historical_data_file" "$HISTORICAL_DAYS"
         generate_trend_analysis "$historical_data_file" "$trend_analysis_file"
     fi
-    
+
     # Calculate compliance scores
     calculate_compliance_scores "$current_status_file" "$compliance_scores_file"
-    
+
     # Generate executive summary
     if [ "$EXECUTIVE_SUMMARY" = "true" ]; then
         generate_executive_summary "$compliance_scores_file" "$trend_analysis_file" "$executive_summary_file"
     fi
-    
+
     # Generate reports in requested formats
     if echo "$REPORT_FORMAT" | grep -q "html"; then
         generate_html_report "$compliance_scores_file" "$trend_analysis_file" "$executive_summary_file" "${report_prefix}.html"
     fi
-    
+
     if echo "$REPORT_FORMAT" | grep -q "json"; then
         # Combine all data into comprehensive JSON report
         if command -v jq &> /dev/null; then
@@ -681,19 +681,19 @@ generate_compliance_report() {
             ' "$current_status_file" "$compliance_scores_file" "$trend_analysis_file" > "${report_prefix}.json"
         fi
     fi
-    
+
     # Clean up temporary files
     rm -f "$current_status_file" "$historical_data_file"
-    
+
     success "Compliance report generated: ${report_prefix}"
-    
+
     # Display summary
     if command -v jq &> /dev/null && [ -f "$compliance_scores_file" ]; then
         echo
         info "Compliance Summary:"
         jq -r '.compliance_scores | to_entries[] | "  \(.key | gsub("_"; " ") | ascii_upcase): \(.value.score)% (\(.value.status // "N/A"))"' "$compliance_scores_file"
     fi
-    
+
     echo "$report_prefix"
 }
 

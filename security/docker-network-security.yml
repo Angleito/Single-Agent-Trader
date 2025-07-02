@@ -110,19 +110,19 @@ services:
     command: |
       sh -c '
         apk add --no-cache iptables
-        
+
         # Apply network policies
         while true; do
           # Ensure Docker chains exist
           iptables -t filter -N DOCKER-TRADING 2>/dev/null || true
-          
+
           # Apply rate limiting rules
           iptables -C DOCKER-TRADING -p tcp --dport 3000 -m limit --limit 25/min --limit-burst 100 -j ACCEPT 2>/dev/null || \
             iptables -A DOCKER-TRADING -p tcp --dport 3000 -m limit --limit 25/min --limit-burst 100 -j ACCEPT
-          
+
           iptables -C DOCKER-TRADING -p tcp --dport 8000 -m limit --limit 50/min --limit-burst 200 -j ACCEPT 2>/dev/null || \
             iptables -A DOCKER-TRADING -p tcp --dport 8000 -m limit --limit 50/min --limit-burst 200 -j ACCEPT
-          
+
           # Log policy enforcements
           echo "$$(date): Network policies enforced"
           sleep 300  # Check every 5 minutes
@@ -146,8 +146,7 @@ x-common-security: &common-security
     - NET_BIND_SERVICE
   read_only: true
 
-# Service overrides for enhanced network security
-services:
+# Service overrides for enhanced network security merged above
   ai-trading-bot:
     <<: *common-security
     networks:
@@ -281,7 +280,7 @@ services:
           iptables -A INPUT -p tcp --dport 3000 -m connlimit --connlimit-above 10 --connlimit-mask 32 -j REJECT 2>/dev/null || true
           iptables -A INPUT -p tcp --dport 8000 -m connlimit --connlimit-above 20 --connlimit-mask 32 -j REJECT 2>/dev/null || true
           iptables -A INPUT -p tcp --dport 8080 -m connlimit --connlimit-above 15 --connlimit-mask 32 -j REJECT 2>/dev/null || true
-          
+
           echo "$$(date): Connection limits enforced"
           sleep 600  # Check every 10 minutes
         done
@@ -301,28 +300,28 @@ services:
         apk add --no-cache curl netcat-openbsd
         while true; do
           echo "$$(date): Running security health checks..."
-          
+
           # Test internal connectivity
           if nc -z ai-trading-bot 8080 2>/dev/null; then
             echo "✓ Trading bot internal connectivity OK"
           else
             echo "✗ Trading bot internal connectivity FAILED"
           fi
-          
+
           # Test external access restrictions
           if ! nc -z 8.8.8.8 80 2>/dev/null; then
             echo "✓ External access restriction OK"
           else
             echo "✗ External access restriction BYPASSED"
           fi
-          
+
           # Test network isolation
           if ! nc -z 172.21.1.1 80 2>/dev/null; then
             echo "✓ Network isolation OK"
           else
             echo "✗ Network isolation COMPROMISED"
           fi
-          
+
           sleep 120
         done
       '

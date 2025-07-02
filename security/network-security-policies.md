@@ -211,49 +211,49 @@ inbound_rules:
   - type: tcp
     ports: "22"
     sources:
-      addresses: 
+      addresses:
         - "YOUR_IP_ADDRESS/32"  # Replace with your IP
         - "OFFICE_IP_RANGE/24"   # Replace with office IP range
-    
+
   # HTTP/HTTPS for dashboard
   - type: tcp
     ports: "80"
     sources:
       addresses: ["0.0.0.0/0"]
-      
+
   - type: tcp
     ports: "443"
     sources:
       addresses: ["0.0.0.0/0"]
-      
+
   # Dashboard Frontend
   - type: tcp
     ports: "3000"
     sources:
-      addresses: 
+      addresses:
         - "YOUR_IP_ADDRESS/32"
         - "TRUSTED_IP_RANGE/24"
-        
+
   # Dashboard Backend API
   - type: tcp
     ports: "8000"
     sources:
-      addresses: 
+      addresses:
         - "YOUR_IP_ADDRESS/32"
         - "TRUSTED_IP_RANGE/24"
-        
+
   # Nginx Reverse Proxy
   - type: tcp
     ports: "8080"
     sources:
-      addresses: 
+      addresses:
         - "YOUR_IP_ADDRESS/32"
         - "TRUSTED_IP_RANGE/24"
-        
+
   # ICMP for monitoring
   - type: icmp
     sources:
-      addresses: 
+      addresses:
         - "MONITORING_IP/32"
 ```
 
@@ -267,29 +267,29 @@ outbound_rules:
     ports: "53"
     destinations:
       addresses: ["0.0.0.0/0"]
-      
+
   - type: udp
     ports: "53"
     destinations:
       addresses: ["0.0.0.0/0"]
-      
+
   # HTTP/HTTPS for API calls
   - type: tcp
     ports: "80"
     destinations:
       addresses: ["0.0.0.0/0"]
-      
+
   - type: tcp
     ports: "443"
     destinations:
       addresses: ["0.0.0.0/0"]
-      
+
   # NTP
   - type: udp
     ports: "123"
     destinations:
       addresses: ["0.0.0.0/0"]
-      
+
   # SMTP for alerts (if needed)
   - type: tcp
     ports: "587"
@@ -309,7 +309,7 @@ geographic_restrictions:
     - "DE"  # Germany
     - "JP"  # Japan
     # Add other countries as needed
-    
+
   blocked_countries:
     - "CN"  # China
     - "RU"  # Russia
@@ -345,19 +345,19 @@ ALERT_THRESHOLD_MBPS=100
 while true; do
     # Get current network usage
     USAGE=$(vnstat -i eth0 --json | jq '.interfaces[0].traffic.total.rx + .interfaces[0].traffic.total.tx')
-    
+
     # Check for suspicious activity
     CONNECTIONS=$(netstat -an | grep ESTABLISHED | wc -l)
-    
+
     # Log current stats
     echo "$(date): Connections: $CONNECTIONS, Usage: $USAGE" >> $LOG_FILE
-    
+
     # Alert on high connection count
     if [ $CONNECTIONS -gt 50 ]; then
         echo "$(date): HIGH CONNECTION COUNT: $CONNECTIONS" >> $LOG_FILE
         # Send alert (implement notification system)
     fi
-    
+
     sleep 60
 done
 EOF
@@ -480,14 +480,14 @@ services:
       - "security.network.isolation=high"
       - "security.external.access=false"
       - "security.monitoring=enabled"
-      
+
   dashboard-backend:
     labels:
       - "security.network.isolation=medium"
       - "security.external.access=true"
       - "security.rate.limit=enabled"
       - "security.monitoring=enabled"
-      
+
   bluefin-service:
     labels:
       - "security.network.isolation=high"
@@ -503,23 +503,23 @@ security_policies:
   network:
     # Prevent containers from accessing host network
     host_network: false
-    
+
     # Restrict container network capabilities
     cap_add: []
     cap_drop: ["ALL"]
-    
+
     # Enable AppArmor/SELinux profiles
     security_opt:
       - "apparmor:docker-trading-bot"
       - "no-new-privileges:true"
-      
+
   processes:
     # Run as non-root user
     user: "1000:1000"
-    
+
     # Read-only root filesystem
     read_only: true
-    
+
     # Limit process capabilities
     cap_drop: ["ALL"]
     cap_add: ["NET_BIND_SERVICE"]
@@ -546,10 +546,10 @@ handle_incident() {
     local incident_type=$1
     local severity=$2
     local details=$3
-    
+
     # Log incident
     echo "$(date): INCIDENT [$severity] $incident_type: $details" >> /var/log/trading-bot/security/incidents.log
-    
+
     case $incident_type in
         "DDOS")
             # Activate DDoS protection
@@ -569,7 +569,7 @@ handle_incident() {
             docker network disconnect trading-network $4
             ;;
     esac
-    
+
     # Send alert
     if [ "$severity" = "HIGH" ] || [ "$severity" = "CRITICAL" ]; then
         echo "$details" | mail -s "CRITICAL: Security Incident Detected" $ALERT_EMAIL
@@ -660,12 +660,12 @@ from datetime import datetime
 class NetworkSecurityMonitor:
     def __init__(self):
         self.metrics = {}
-        
+
     def get_network_stats(self):
         """Get current network statistics"""
         stats = psutil.net_io_counters()
         connections = len(psutil.net_connections())
-        
+
         return {
             'bytes_sent': stats.bytes_sent,
             'bytes_recv': stats.bytes_recv,
@@ -674,7 +674,7 @@ class NetworkSecurityMonitor:
             'active_connections': connections,
             'timestamp': datetime.now().isoformat()
         }
-    
+
     def get_firewall_status(self):
         """Check UFW and iptables status"""
         try:
@@ -686,7 +686,7 @@ class NetworkSecurityMonitor:
             }
         except:
             return {'status': 'error', 'ufw_active': False}
-    
+
     def get_security_alerts(self):
         """Get recent security alerts from logs"""
         alerts = []
@@ -712,14 +712,14 @@ class NetworkSecurityMonitor:
 const SecurityDashboard = () => {
   const [securityMetrics, setSecurityMetrics] = useState({});
   const [alerts, setAlerts] = useState([]);
-  
+
   useEffect(() => {
     const fetchSecurityData = async () => {
       try {
         const response = await fetch('/api/security/metrics');
         const data = await response.json();
         setSecurityMetrics(data);
-        
+
         const alertResponse = await fetch('/api/security/alerts');
         const alertData = await alertResponse.json();
         setAlerts(alertData);
@@ -727,13 +727,13 @@ const SecurityDashboard = () => {
         console.error('Error fetching security data:', error);
       }
     };
-    
+
     fetchSecurityData();
     const interval = setInterval(fetchSecurityData, 30000); // Update every 30 seconds
-    
+
     return () => clearInterval(interval);
   }, []);
-  
+
   return (
     <div className="security-dashboard">
       <div className="security-status">
@@ -748,7 +748,7 @@ const SecurityDashboard = () => {
           <div>Firewall Rules: {securityMetrics.firewall?.ufw_rules}</div>
         </div>
       </div>
-      
+
       <div className="security-alerts">
         <h3>Recent Security Alerts</h3>
         {alerts.map((alert, index) => (
@@ -812,7 +812,7 @@ const SecurityDashboard = () => {
 
 ---
 
-**Document Version**: 2.0  
-**Last Updated**: July 2025  
-**Classification**: Internal Use  
+**Document Version**: 2.0
+**Last Updated**: July 2025
+**Classification**: Internal Use
 **Owner**: Trading Bot Security Team

@@ -17,15 +17,15 @@ templates:
 route:
   # Default receiver for all alerts
   receiver: 'default-alerts'
-  
+
   # Group alerts by rule and container
   group_by: ['rule', 'container']
-  
+
   # Wait for alerts to accumulate before sending
   group_wait: 10s
   group_interval: 30s
   repeat_interval: 1h
-  
+
   # Route specific alert types to appropriate channels
   routes:
     # Critical security alerts - immediate notification
@@ -35,7 +35,7 @@ route:
       group_wait: 5s
       group_interval: 10s
       repeat_interval: 15m
-    
+
     # Emergency alerts - immediate notification via multiple channels
     - match:
         priority: 'EMERGENCY'
@@ -43,7 +43,7 @@ route:
       group_wait: 0s
       group_interval: 0s
       repeat_interval: 5m
-    
+
     # Trading-specific alerts
     - match:
         tags: 'trading'
@@ -51,7 +51,7 @@ route:
       group_wait: 15s
       group_interval: 1m
       repeat_interval: 30m
-    
+
     # Financial data protection alerts
     - match:
         tags: 'financial'
@@ -59,7 +59,7 @@ route:
       group_wait: 10s
       group_interval: 30s
       repeat_interval: 20m
-    
+
     # Container security alerts
     - match:
         tags: 'container'
@@ -67,7 +67,7 @@ route:
       group_wait: 20s
       group_interval: 2m
       repeat_interval: 1h
-    
+
     # Low priority informational alerts
     - match:
         priority: 'INFORMATIONAL'
@@ -85,19 +85,19 @@ receivers:
         subject: '[Trading Bot Security] {{ .GroupLabels.rule }}'
         body: |
           Security Alert Detected:
-          
+
           Rule: {{ .GroupLabels.rule }}
           Priority: {{ .GroupLabels.priority }}
           Container: {{ .GroupLabels.container }}
           Time: {{ .GroupLabels.time }}
-          
+
           Details:
           {{ range .Alerts }}
           - {{ .Annotations.output }}
           {{ end }}
-          
+
           Please investigate immediately.
-    
+
     slack_configs:
       - api_url: '${SLACK_WEBHOOK_URL}'
         channel: '#trading-security-alerts'
@@ -108,7 +108,7 @@ receivers:
           🔒 Security Alert: {{ .GroupLabels.rule }}
           Priority: {{ .GroupLabels.priority }}
           Container: {{ .GroupLabels.container }}
-          
+
           {{ range .Alerts }}
           {{ .Annotations.output }}
           {{ end }}
@@ -121,27 +121,27 @@ receivers:
         subject: '[CRITICAL] Trading Bot Security Breach'
         body: |
           🚨 CRITICAL SECURITY ALERT 🚨
-          
+
           A critical security event has been detected in the trading bot infrastructure.
-          
+
           Rule: {{ .GroupLabels.rule }}
           Priority: {{ .GroupLabels.priority }}
           Container: {{ .GroupLabels.container }}
           Time: {{ .GroupLabels.time }}
-          
+
           Event Details:
           {{ range .Alerts }}
           - {{ .Annotations.output }}
           {{ end }}
-          
+
           IMMEDIATE ACTION REQUIRED:
           1. Check container status
           2. Review security logs
           3. Isolate affected containers if necessary
           4. Investigate root cause
-          
+
           Trading Bot Security Monitor
-    
+
     slack_configs:
       - api_url: '${SLACK_WEBHOOK_URL}'
         channel: '#trading-security-critical'
@@ -150,20 +150,20 @@ receivers:
         title: '🚨 CRITICAL SECURITY ALERT'
         text: |
           **CRITICAL SECURITY BREACH DETECTED**
-          
+
           Rule: {{ .GroupLabels.rule }}
           Priority: {{ .GroupLabels.priority }}
           Container: {{ .GroupLabels.container }}
-          
+
           **Event Details:**
           {{ range .Alerts }}
           {{ .Annotations.output }}
           {{ end }}
-          
+
           **IMMEDIATE ACTION REQUIRED**
         color: 'danger'
         send_resolved: true
-    
+
     # PagerDuty integration for critical alerts
     pagerduty_configs:
       - routing_key: '${PAGERDUTY_INTEGRATION_KEY}'
@@ -185,25 +185,25 @@ receivers:
         subject: '[EMERGENCY] Trading Bot Security Emergency'
         body: |
           🆘 EMERGENCY SECURITY SITUATION 🆘
-          
+
           An emergency security event has been detected that requires immediate attention.
-          
+
           Rule: {{ .GroupLabels.rule }}
           Container: {{ .GroupLabels.container }}
           Time: {{ .GroupLabels.time }}
-          
+
           Emergency Details:
           {{ range .Alerts }}
           - {{ .Annotations.output }}
           {{ end }}
-          
+
           EMERGENCY RESPONSE REQUIRED:
           1. STOP all trading operations immediately
           2. Isolate affected containers
           3. Preserve forensic evidence
           4. Contact security team
           5. Begin incident response procedures
-    
+
     slack_configs:
       - api_url: '${SLACK_WEBHOOK_URL}'
         channel: '#trading-security-emergency'
@@ -212,15 +212,15 @@ receivers:
         title: '🆘 SECURITY EMERGENCY'
         text: |
           **EMERGENCY SECURITY SITUATION**
-          
+
           Rule: {{ .GroupLabels.rule }}
           Container: {{ .GroupLabels.container }}
-          
+
           **Emergency Details:**
           {{ range .Alerts }}
           {{ .Annotations.output }}
           {{ end }}
-          
+
           **STOP ALL TRADING OPERATIONS**
           **INITIATE INCIDENT RESPONSE**
         color: '#FF0000'
@@ -236,10 +236,10 @@ receivers:
         title: 'Trading Bot Security Alert'
         text: |
           💰 Trading Security Alert: {{ .GroupLabels.rule }}
-          
+
           Container: {{ .GroupLabels.container }}
           Priority: {{ .GroupLabels.priority }}
-          
+
           {{ range .Alerts }}
           {{ .Annotations.output }}
           {{ end }}
@@ -253,18 +253,18 @@ receivers:
         subject: '[Financial Security] Data Protection Alert'
         body: |
           Financial Data Security Alert
-          
+
           Rule: {{ .GroupLabels.rule }}
           Priority: {{ .GroupLabels.priority }}
           Container: {{ .GroupLabels.container }}
-          
+
           Details:
           {{ range .Alerts }}
           - {{ .Annotations.output }}
           {{ end }}
-          
+
           Please review financial data access and verify authorized operations.
-    
+
     slack_configs:
       - api_url: '${SLACK_WEBHOOK_URL}'
         channel: '#financial-security'
@@ -273,10 +273,10 @@ receivers:
         title: 'Financial Data Security Alert'
         text: |
           🏦 Financial Data Alert: {{ .GroupLabels.rule }}
-          
+
           Container: {{ .GroupLabels.container }}
           Priority: {{ .GroupLabels.priority }}
-          
+
           {{ range .Alerts }}
           {{ .Annotations.output }}
           {{ end }}
@@ -293,10 +293,10 @@ receivers:
         title: 'Container Security Alert'
         text: |
           🐳 Container Security Alert: {{ .GroupLabels.rule }}
-          
+
           Container: {{ .GroupLabels.container }}
           Priority: {{ .GroupLabels.priority }}
-          
+
           {{ range .Alerts }}
           {{ .Annotations.output }}
           {{ end }}
@@ -310,16 +310,16 @@ receivers:
         subject: '[Audit] Trading Bot Security Audit'
         body: |
           Trading Bot Security Audit Log
-          
+
           Rule: {{ .GroupLabels.rule }}
           Container: {{ .GroupLabels.container }}
           Time: {{ .GroupLabels.time }}
-          
+
           Audit Details:
           {{ range .Alerts }}
           - {{ .Annotations.output }}
           {{ end }}
-          
+
           This is an informational audit log for compliance purposes.
 
 # Inhibition rules to prevent alert spam
@@ -330,14 +330,14 @@ inhibit_rules:
     target_match:
       priority: 'WARNING'
     equal: ['container']
-  
+
   # Inhibit informational alerts when higher priority alerts are firing
   - source_match:
       priority: 'ALERT'
     target_match:
       priority: 'INFORMATIONAL'
     equal: ['container']
-  
+
   # Inhibit duplicate emergency alerts
   - source_match:
       priority: 'EMERGENCY'

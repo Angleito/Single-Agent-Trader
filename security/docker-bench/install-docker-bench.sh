@@ -59,7 +59,7 @@ check_root() {
 # Create directory structure
 create_directories() {
     info "Creating directory structure..."
-    
+
     local dirs=(
         "${SCRIPT_DIR}/logs"
         "${SCRIPT_DIR}/config"
@@ -69,7 +69,7 @@ create_directories() {
         "${SCRIPT_DIR}/scripts"
         "${SCRIPT_DIR}/templates"
     )
-    
+
     for dir in "${dirs[@]}"; do
         mkdir -p "$dir"
         info "Created directory: $dir"
@@ -79,32 +79,32 @@ create_directories() {
 # Check system requirements
 check_requirements() {
     info "Checking system requirements..."
-    
+
     local required_tools=("docker" "git" "curl" "jq" "awk" "grep")
     local missing_tools=()
-    
+
     for tool in "${required_tools[@]}"; do
         if ! command -v "$tool" &> /dev/null; then
             missing_tools+=("$tool")
         fi
     done
-    
+
     if [ ${#missing_tools[@]} -ne 0 ]; then
         error_exit "Missing required tools: ${missing_tools[*]}"
     fi
-    
+
     # Check Docker daemon
     if ! docker info &> /dev/null; then
         error_exit "Docker daemon is not running or not accessible"
     fi
-    
+
     success "All system requirements met"
 }
 
 # Install Docker Bench Security
 install_docker_bench() {
     info "Installing Docker Bench Security..."
-    
+
     if [ -d "$DOCKER_BENCH_DIR" ]; then
         warning "Docker Bench Security already exists. Updating..."
         cd "$DOCKER_BENCH_DIR"
@@ -113,17 +113,17 @@ install_docker_bench() {
         git clone https://github.com/docker/docker-bench-security.git "$DOCKER_BENCH_DIR" \
             || error_exit "Failed to clone Docker Bench Security"
     fi
-    
+
     # Make scripts executable
     chmod +x "${DOCKER_BENCH_DIR}/docker-bench-security.sh"
-    
+
     success "Docker Bench Security installed successfully"
 }
 
 # Create custom configuration for trading bot
 create_custom_config() {
     info "Creating custom Docker Bench configuration for trading bot..."
-    
+
     cat > "${CONFIG_DIR}/docker-bench.conf" << 'EOF'
 # Docker Bench Security Configuration for AI Trading Bot
 # Custom configuration tailored for cryptocurrency trading applications
@@ -224,7 +224,7 @@ EOF
 # Create custom security checks for trading bot
 create_custom_checks() {
     info "Creating custom security checks for AI trading bot..."
-    
+
     # Check for cryptocurrency-specific security issues
     cat > "${CUSTOM_CHECKS_DIR}/8_1_crypto_security.sh" << 'EOF'
 #!/bin/bash
@@ -236,14 +236,14 @@ check_8_1() {
     local desc="Ensure cryptocurrency keys are not exposed in environment variables"
     local remediation="Remove sensitive keys from environment variables and use Docker secrets or external key management"
     local remediationImpact="High - Prevents unauthorized access to trading accounts"
-    
+
     local totalChecks=0
     local totalFailed=0
-    
+
     # Check for exposed private keys in environment variables
     for container in $(docker ps --format "{{.Names}}" | grep -E "(trading|bluefin|coinbase)"); do
         totalChecks=$((totalChecks + 1))
-        
+
         # Check environment variables for sensitive patterns
         if docker exec "$container" env 2>/dev/null | grep -iE "(private_key|secret_key|api_key|mnemonic)" | grep -v "\\*\\*\\*"; then
             warn "$id     * Exposed cryptocurrency keys found in container: $container"
@@ -251,7 +251,7 @@ check_8_1() {
             totalFailed=$((totalFailed + 1))
         fi
     done
-    
+
     if [ $totalFailed -eq 0 ]; then
         pass "$id     * No exposed cryptocurrency keys found in containers"
         logjson "PASS" "$id" "$desc"
@@ -269,17 +269,17 @@ check_8_2() {
     local desc="Ensure trading bot network communications are secure"
     local remediation="Configure proper network isolation and encryption for trading communications"
     local remediationImpact="High - Prevents network-based attacks on trading systems"
-    
+
     local totalChecks=0
     local totalFailed=0
-    
+
     # Check for trading network isolation
     if docker network ls | grep -q "trading-network"; then
         totalChecks=$((totalChecks + 1))
-        
+
         # Check network configuration
         network_info=$(docker network inspect trading-network)
-        
+
         # Verify network is not using default bridge
         if echo "$network_info" | jq -r '.[0].Driver' | grep -q "bridge"; then
             # Check for custom bridge configuration
@@ -289,7 +289,7 @@ check_8_2() {
                 totalFailed=$((totalFailed + 1))
             fi
         fi
-        
+
         # Check for external connectivity restrictions
         if echo "$network_info" | jq -r '.[0].Internal' | grep -q "false"; then
             info "$id     * Trading network allows external connectivity"
@@ -299,7 +299,7 @@ check_8_2() {
         logjson "WARN" "$id" "$desc" "system" "No custom trading network configured"
         totalFailed=$((totalFailed + 1))
     fi
-    
+
     if [ $totalFailed -eq 0 ]; then
         pass "$id     * Trading network security configuration verified"
         logjson "PASS" "$id" "$desc"
@@ -317,24 +317,24 @@ check_8_3() {
     local desc="Ensure trading data volumes have appropriate security permissions"
     local remediation="Set proper file permissions and ownership on trading data directories"
     local remediationImpact="Medium - Prevents unauthorized access to trading data and logs"
-    
+
     local totalChecks=0
     local totalFailed=0
-    
+
     # Check trading data directories
     local data_dirs=("./data" "./logs" "./config")
-    
+
     for dir in "${data_dirs[@]}"; do
         if [ -d "$dir" ]; then
             totalChecks=$((totalChecks + 1))
-            
+
             # Check permissions (should not be world-writable)
             if [ "$(stat -c %a "$dir" | cut -c3)" = "7" ]; then
                 warn "$id     * Directory $dir is world-writable - security risk"
                 logjson "WARN" "$id" "$desc" "$dir" "World-writable permissions"
                 totalFailed=$((totalFailed + 1))
             fi
-            
+
             # Check for sensitive files with wrong permissions
             find "$dir" -name "*.json" -o -name "*.log" -o -name "*.key" | while read -r file; do
                 if [ -f "$file" ] && [ "$(stat -c %a "$file" | cut -c2-3)" = "77" ]; then
@@ -345,7 +345,7 @@ check_8_3() {
             done
         fi
     done
-    
+
     if [ $totalFailed -eq 0 ]; then
         pass "$id     * Trading data directories have appropriate security permissions"
         logjson "PASS" "$id" "$desc"
@@ -355,21 +355,21 @@ EOF
 
     # Make custom checks executable
     chmod +x "${CUSTOM_CHECKS_DIR}"/*.sh
-    
+
     success "Custom security checks created"
 }
 
 # Create wrapper script for Docker Bench
 create_wrapper_script() {
     info "Creating Docker Bench wrapper script..."
-    
+
     # Check if script already exists
     if [ -f "${SCRIPT_DIR}/scripts/run-security-scan.sh" ]; then
         success "Docker Bench wrapper script already exists"
     else
         warning "Docker Bench wrapper script not found - should be created separately"
     fi
-    
+
     # Ensure script is executable
     if [ -f "${SCRIPT_DIR}/scripts/run-security-scan.sh" ]; then
         chmod +x "${SCRIPT_DIR}/scripts/run-security-scan.sh"
@@ -380,7 +380,7 @@ create_wrapper_script() {
 # Create systemd service for scheduled scans
 create_systemd_service() {
     info "Creating systemd service for scheduled security scans..."
-    
+
     # Create service file
     cat > "${SCRIPT_DIR}/templates/docker-security-scan.service" << EOF
 [Unit]
@@ -425,7 +425,7 @@ EOF
 # Main installation process
 main() {
     info "Starting Docker Bench Security installation for AI Trading Bot"
-    
+
     check_root
     create_directories
     check_requirements
@@ -434,7 +434,7 @@ main() {
     create_custom_checks
     create_wrapper_script
     create_systemd_service
-    
+
     success "Docker Bench Security installation completed successfully!"
     echo
     info "Next steps:"

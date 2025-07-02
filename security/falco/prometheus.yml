@@ -51,7 +51,7 @@ scrape_configs:
   # Trading bot container metrics
   - job_name: 'trading-bot-containers'
     static_configs:
-      - targets: 
+      - targets:
         - 'ai-trading-bot:9091'
         - 'bluefin-service:9091'
         - 'dashboard-backend:9092'

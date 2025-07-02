@@ -9,16 +9,16 @@ services:
     image: falcosecurity/falco:0.36.2
     container_name: falco-security-monitor
     restart: unless-stopped
-    
+
     # PRIVILEGED SECURITY MONITORING - Required for runtime security
     privileged: true
     pid: host
     network_mode: host
-    
+
     # Security monitoring requires elevated privileges
     security_opt:
       - apparmor:unconfined
-    
+
     # Volume mounts for security monitoring
     volumes:
       # Falco configuration
@@ -26,7 +26,7 @@ services:
       - ./security/falco/trading_bot_rules.yaml:/etc/falco/trading_bot_rules.yaml:ro
       - ./security/falco/financial_security_rules.yaml:/etc/falco/financial_security_rules.yaml:ro
       - ./security/falco/container_security_rules.yaml:/etc/falco/container_security_rules.yaml:ro
-      
+
       # Host system access for security monitoring
       - /var/run/docker.sock:/host/var/run/docker.sock:ro
       - /dev:/host/dev:ro
@@ -35,15 +35,15 @@ services:
       - /lib/modules:/host/lib/modules:ro
       - /usr:/host/usr:ro
       - /etc:/host/etc:ro
-      
+
       # Falco logs
       - ./logs/falco:/var/log/falco:rw
       - falco-data:/var/lib/falco:rw
-      
+
       # Trading bot monitoring
       - ./logs:/app/trading-logs:ro
       - ./data:/app/trading-data:ro
-    
+
     environment:
       - FALCO_GRPC_ENABLED=true
       - FALCO_GRPC_BIND_ADDRESS=0.0.0.0:5060
@@ -53,12 +53,12 @@ services:
       - EXCHANGE_TYPE=${EXCHANGE__EXCHANGE_TYPE:-bluefin}
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      
+
       # Trading bot specific metadata
       - FALCO_METADATA_APPLICATION=ai-trading-bot
       - FALCO_METADATA_ENVIRONMENT=${ENVIRONMENT:-production}
       - FALCO_METADATA_EXCHANGE=${EXCHANGE__EXCHANGE_TYPE:-bluefin}
-    
+
     # Health check for Falco service
     healthcheck:
       test: ["CMD", "curl", "-f", "--connect-timeout", "5", "http://localhost:8765/healthz"]
@@ -66,7 +66,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 45s
-    
+
     # Resource limits optimized for single-core VPS
     deploy:
       resources:
@@ -76,17 +76,17 @@ services:
         reservations:
           memory: 256M
           cpus: '0.1'
-    
+
     # Logging configuration
     logging:
       driver: "json-file"
       options:
         max-size: "20m"
         max-file: "5"
-    
+
     networks:
       - trading-network
-    
+
     # Start after trading services are up
     depends_on:
       - ai-trading-bot
@@ -98,7 +98,7 @@ services:
     image: prom/alertmanager:v0.26.0
     container_name: falco-alertmanager
     restart: unless-stopped
-    
+
     # Security hardening
     user: "65534:65534"  # nobody user
     read_only: true
@@ -108,12 +108,12 @@ services:
       - ALL
     tmpfs:
       - /tmp:noexec,nosuid,size=50m
-    
+
     volumes:
       - ./security/falco/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - alertmanager-data:/alertmanager:rw
       - ./logs/falco:/var/log/falco:rw
-    
+
     environment:
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
       - PAGERDUTY_INTEGRATION_KEY=${PAGERDUTY_INTEGRATION_KEY:-}
@@ -122,24 +122,24 @@ services:
       - EMAIL_USERNAME=${EMAIL_USERNAME:-}
       - EMAIL_PASSWORD=${EMAIL_PASSWORD:-}
       - EMAIL_TO=${SECURITY_EMAIL_TO:-}
-    
+
     ports:
       - "127.0.0.1:9093:9093"  # Bind to localhost only
-    
+
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
       - '--web.external-url=http://localhost:9093'
       - '--cluster.listen-address='
       - '--log.level=info'
-    
+
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9093/-/healthy"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 20s
-    
+
     deploy:
       resources:
         limits:
@@ -148,13 +148,13 @@ services:
         reservations:
           memory: 64M
           cpus: '0.02'
-    
+
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-    
+
     networks:
       - trading-network
 
@@ -166,7 +166,7 @@ services:
     image: falco-security-processor:latest
     container_name: falco-security-processor
     restart: unless-stopped
-    
+
     # Security hardening
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     read_only: true
@@ -176,12 +176,12 @@ services:
       - ALL
     tmpfs:
       - /tmp:noexec,nosuid,size=50m
-    
+
     volumes:
       - ./logs/falco:/app/logs:rw
       - ./data/security:/app/data:rw
       - ./security/falco/processor_config.yaml:/app/config.yaml:ro
-    
+
     environment:
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
@@ -190,17 +190,17 @@ services:
       - SECURITY_EMAIL_TO=${SECURITY_EMAIL_TO:-}
       - ALERTMANAGER_URL=http://falco-alertmanager:9093
       - FALCO_EVENTS_ENDPOINT=http://falco:8765
-    
+
     ports:
       - "127.0.0.1:8080:8080"  # Security event processing endpoint
-    
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 15s
-    
+
     deploy:
       resources:
         limits:
@@ -209,16 +209,16 @@ services:
         reservations:
           memory: 128M
           cpus: '0.03'
-    
+
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-    
+
     networks:
       - trading-network
-    
+
     depends_on:
       - falco
       - falco-alertmanager
@@ -228,7 +228,7 @@ services:
     image: prom/prometheus:v2.47.0
     container_name: prometheus-falco
     restart: unless-stopped
-    
+
     # Security hardening
     user: "65534:65534"  # nobody user
     read_only: true
@@ -238,11 +238,11 @@ services:
       - ALL
     tmpfs:
       - /tmp:noexec,nosuid,size=50m
-    
+
     volumes:
       - ./security/falco/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-falco-data:/prometheus:rw
-    
+
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -252,17 +252,17 @@ services:
       - '--web.enable-lifecycle'
       - '--web.enable-admin-api'
       - '--log.level=info'
-    
+
     ports:
       - "127.0.0.1:9090:9090"  # Bind to localhost only
-    
+
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
-    
+
     deploy:
       resources:
         limits:
@@ -271,16 +271,16 @@ services:
         reservations:
           memory: 128M
           cpus: '0.03'
-    
+
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-    
+
     networks:
       - trading-network
-    
+
     depends_on:
       - falco
 
@@ -289,12 +289,12 @@ volumes:
   falco-data:
     name: falco-data
     driver: local
-  
+
   # AlertManager persistent data
   alertmanager-data:
     name: alertmanager-data
     driver: local
-  
+
   # Prometheus persistent data
   prometheus-falco-data:
     name: prometheus-falco-data

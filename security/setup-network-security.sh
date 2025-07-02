@@ -36,30 +36,30 @@ check_root() {
 
 check_system() {
     log "Checking system requirements..."
-    
+
     # Check Ubuntu version
     if ! grep -q "Ubuntu" /etc/os-release; then
         echo -e "${YELLOW}Warning: This script is optimized for Ubuntu. Proceeding anyway...${NC}"
     fi
-    
+
     # Check Docker
     if ! command -v docker &> /dev/null; then
         echo -e "${RED}Docker is not installed. Please install Docker first.${NC}"
         exit 1
     fi
-    
+
     # Check docker-compose
     if ! command -v docker-compose &> /dev/null; then
         echo -e "${RED}docker-compose is not installed. Please install docker-compose first.${NC}"
         exit 1
     fi
-    
+
     log "System requirements check passed"
 }
 
 install_security_tools() {
     log "Installing security tools..."
-    
+
     apt-get update
     apt-get install -y \
         ufw \
@@ -73,99 +73,99 @@ install_security_tools() {
         jq \
         mailutils \
         logrotate
-    
+
     log "Security tools installed successfully"
 }
 
 configure_ufw() {
     log "Configuring UFW firewall..."
-    
+
     # Reset UFW to defaults
     ufw --force reset
-    
+
     # Set default policies
     ufw default deny incoming
     ufw default allow outgoing
     ufw default deny forward
-    
+
     # Enable UFW logging
     ufw logging on
-    
+
     # SSH Access (default port - modify as needed)
     ufw allow 22/tcp comment 'SSH Access'
-    
+
     # Dashboard ports with rate limiting
     ufw limit 3000/tcp comment 'Dashboard Frontend'
     ufw limit 8000/tcp comment 'Dashboard Backend API'
     ufw limit 8080/tcp comment 'Nginx Reverse Proxy'
-    
+
     # Debug ports (localhost only)
     ufw allow from 127.0.0.1 to any port 8765 comment 'MCP Memory (localhost only)'
     ufw allow from 127.0.0.1 to any port 8767 comment 'MCP OmniSearch (localhost only)'
     ufw allow from 127.0.0.1 to any port 8081 comment 'Bluefin Service Debug (localhost only)'
-    
+
     # Enable UFW
     ufw --force enable
-    
+
     log "UFW firewall configured successfully"
 }
 
 configure_iptables_docker() {
     log "Configuring iptables for Docker integration..."
-    
+
     # Create custom chains for Docker traffic
     iptables -t filter -N DOCKER-TRADING 2>/dev/null || true
     iptables -t filter -N DOCKER-TRADING-ISOLATION 2>/dev/null || true
-    
+
     # Clear existing rules in custom chains
     iptables -t filter -F DOCKER-TRADING 2>/dev/null || true
     iptables -t filter -F DOCKER-TRADING-ISOLATION 2>/dev/null || true
-    
+
     # Insert rules to use custom chains
     iptables -t filter -I DOCKER-USER -j DOCKER-TRADING 2>/dev/null || true
     iptables -t filter -I FORWARD -j DOCKER-TRADING-ISOLATION 2>/dev/null || true
-    
+
     # Block inter-container communication by default
     iptables -t filter -A DOCKER-TRADING-ISOLATION -i docker0 -o docker0 -j DROP
-    
+
     # Allow specific container-to-container communication
     # These rules will be applied dynamically when containers start
-    
+
     # Rate limiting for external connections
     iptables -t filter -A DOCKER-TRADING -p tcp --dport 3000 -m limit --limit 25/min --limit-burst 100 -j ACCEPT
     iptables -t filter -A DOCKER-TRADING -p tcp --dport 8000 -m limit --limit 50/min --limit-burst 200 -j ACCEPT
     iptables -t filter -A DOCKER-TRADING -p tcp --dport 8080 -m limit --limit 30/min --limit-burst 150 -j ACCEPT
-    
+
     # Drop excessive connections
     iptables -t filter -A DOCKER-TRADING -p tcp --dport 3000 -j REJECT --reject-with tcp-reset
     iptables -t filter -A DOCKER-TRADING -p tcp --dport 8000 -j REJECT --reject-with tcp-reset
     iptables -t filter -A DOCKER-TRADING -p tcp --dport 8080 -j REJECT --reject-with tcp-reset
-    
+
     # Log dropped packets (limited to prevent log spam)
     iptables -t filter -A DOCKER-TRADING -m limit --limit 5/min -j LOG --log-prefix "DOCKER-TRADING-DROP: "
     iptables -t filter -A DOCKER-TRADING -j DROP
-    
+
     # Save iptables rules
     netfilter-persistent save
-    
+
     log "iptables Docker integration configured successfully"
 }
 
 configure_ddos_protection() {
     log "Configuring DDoS protection..."
-    
+
     # Limit new SSH connections
     iptables -A INPUT -p tcp --dport 22 -m conntrack --ctstate NEW -m limit --limit 2/min --limit-burst 5 -j ACCEPT
     iptables -A INPUT -p tcp --dport 22 -m conntrack --ctstate NEW -j REJECT --reject-with tcp-reset
-    
+
     # SYN flood protection
     iptables -A INPUT -p tcp --syn -m limit --limit 10/s --limit-burst 20 -j ACCEPT
     iptables -A INPUT -p tcp --syn -j DROP
-    
+
     # Ping flood protection
     iptables -A INPUT -p icmp --icmp-type echo-request -m limit --limit 2/s --limit-burst 5 -j ACCEPT
     iptables -A INPUT -p icmp --icmp-type echo-request -j DROP
-    
+
     # Port scan protection
     iptables -A INPUT -p tcp --tcp-flags ALL NONE -j DROP
     iptables -A INPUT -p tcp --tcp-flags ALL ALL -j DROP
@@ -175,20 +175,20 @@ configure_ddos_protection() {
     iptables -A INPUT -p tcp --tcp-flags ACK,FIN FIN -j DROP
     iptables -A INPUT -p tcp --tcp-flags ACK,PSH PSH -j DROP
     iptables -A INPUT -p tcp --tcp-flags ACK,URG URG -j DROP
-    
+
     # Connection tracking limits
     iptables -A INPUT -p tcp -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
     iptables -A INPUT -p tcp -m connlimit --connlimit-above 20 --connlimit-mask 32 -j REJECT --reject-with tcp-reset
-    
+
     # Save iptables rules
     netfilter-persistent save
-    
+
     log "DDoS protection configured successfully"
 }
 
 configure_fail2ban() {
     log "Configuring Fail2Ban..."
-    
+
     # Create Fail2Ban configuration
     cat > /etc/fail2ban/jail.local << 'EOF'
 [DEFAULT]
@@ -234,10 +234,10 @@ findtime = 300
 bantime = 7200
 action = iptables-allports[name=docker-iptables]
 EOF
-    
+
     # Create custom filters
     mkdir -p /etc/fail2ban/filter.d
-    
+
     cat > /etc/fail2ban/filter.d/trading-bot-api.conf << 'EOF'
 [Definition]
 failregex = ^.*"(POST|GET|PUT|DELETE) /api/.*" (400|401|403|404|429|500) .*$
@@ -245,41 +245,41 @@ failregex = ^.*"(POST|GET|PUT|DELETE) /api/.*" (400|401|403|404|429|500) .*$
 ignoreregex = ^.*"GET /api/health.*" 200 .*$
               ^.*"GET /health.*" 200 .*$
 EOF
-    
+
     cat > /etc/fail2ban/filter.d/dashboard.conf << 'EOF'
 [Definition]
 failregex = ^<HOST> -.*"(GET|POST).*" (404|403|400|429) .*$
             ^.*\[error\].*client: <HOST>.*$
 ignoreregex = ^<HOST> -.*"GET /(health|favicon\.ico).*" (200|404) .*$
 EOF
-    
+
     cat > /etc/fail2ban/filter.d/docker-iptables.conf << 'EOF'
 [Definition]
 failregex = .*DOCKER-TRADING-DROP:.*SRC=<HOST>.*
 ignoreregex =
 EOF
-    
+
     # Start and enable Fail2Ban
     systemctl enable fail2ban
     systemctl restart fail2ban
-    
+
     log "Fail2Ban configured successfully"
 }
 
 setup_network_monitoring() {
     log "Setting up network monitoring..."
-    
+
     # Create monitoring directories
     mkdir -p /var/log/trading-bot/security
     mkdir -p /var/log/trading-bot/monitoring
     chmod 750 /var/log/trading-bot/security
     chmod 750 /var/log/trading-bot/monitoring
-    
+
     # Configure vnstat for interface monitoring
     vnstat -i eth0 --create 2>/dev/null || true
     systemctl enable vnstat
     systemctl start vnstat
-    
+
     # Create network monitoring script
     cat > /usr/local/bin/network-monitor.sh << 'EOF'
 #!/bin/bash
@@ -298,29 +298,29 @@ send_alert() {
 # Function to check network health
 check_network_health() {
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    
+
     # Get current network connections
     local connections=$(netstat -an | grep -E ':(3000|8000|8080|22) ' | grep ESTABLISHED | wc -l)
     local total_connections=$(netstat -an | grep ESTABLISHED | wc -l)
-    
+
     # Get network interface stats
     local interface_stats=$(cat /proc/net/dev | grep eth0 | awk '{print $2,$10}')
     local rx_bytes=$(echo $interface_stats | cut -d' ' -f1)
     local tx_bytes=$(echo $interface_stats | cut -d' ' -f2)
-    
+
     # Log current stats
     echo "$timestamp,connections:$connections,total:$total_connections,rx:$rx_bytes,tx:$tx_bytes" >> "$LOG_FILE"
-    
+
     # Check for suspicious activity
     if [ "$total_connections" -gt "$ALERT_THRESHOLD_CONNECTIONS" ]; then
         send_alert "HIGH CONNECTION COUNT ALERT" "Total connections: $total_connections exceeds threshold: $ALERT_THRESHOLD_CONNECTIONS"
     fi
-    
+
     # Check for Docker container network issues
     if ! docker network ls | grep -q trading-network; then
         send_alert "DOCKER NETWORK ERROR" "Trading network is not available"
     fi
-    
+
     # Check firewall status
     if ! ufw status | grep -q "Status: active"; then
         send_alert "FIREWALL DOWN" "UFW firewall is not active"
@@ -333,9 +333,9 @@ while true; do
     sleep 60
 done
 EOF
-    
+
     chmod +x /usr/local/bin/network-monitor.sh
-    
+
     # Create systemd service for network monitoring
     cat > /etc/systemd/system/trading-bot-network-monitor.service << 'EOF'
 [Unit]
@@ -352,17 +352,17 @@ RestartSec=10
 [Install]
 WantedBy=multi-user.target
 EOF
-    
+
     systemctl daemon-reload
     systemctl enable trading-bot-network-monitor
     systemctl start trading-bot-network-monitor
-    
+
     log "Network monitoring setup completed"
 }
 
 configure_logging() {
     log "Configuring security logging..."
-    
+
     # Configure rsyslog for security events
     cat >> /etc/rsyslog.conf << 'EOF'
 
@@ -372,7 +372,7 @@ configure_logging() {
 :msg,contains,"FAIL2BAN" /var/log/trading-bot/security/fail2ban.log
 & stop
 EOF
-    
+
     # Setup log rotation
     cat > /etc/logrotate.d/trading-bot-security << 'EOF'
 /var/log/trading-bot/security/*.log /var/log/trading-bot/monitoring/*.log {
@@ -389,16 +389,16 @@ EOF
     endscript
 }
 EOF
-    
+
     # Restart rsyslog
     systemctl restart rsyslog
-    
+
     log "Security logging configured successfully"
 }
 
 create_emergency_scripts() {
     log "Creating emergency response scripts..."
-    
+
     # Emergency shutdown script
     cat > /usr/local/bin/emergency-shutdown.sh << 'EOF'
 #!/bin/bash
@@ -439,7 +439,7 @@ netfilter-persistent save
 echo "Emergency shutdown complete. Only SSH and localhost access maintained."
 echo "To restore normal operation, run: /usr/local/bin/restore-normal-operation.sh"
 EOF
-    
+
     # Container isolation script
     cat > /usr/local/bin/isolate-containers.sh << 'EOF'
 #!/bin/bash
@@ -460,13 +460,13 @@ fi
 # Disconnect containers from external networks
 for container in $containers; do
     echo "Isolating container: $container"
-    
+
     # Disconnect from bridge network
     docker network disconnect bridge "$container" 2>/dev/null || true
-    
+
     # Disconnect from trading-network
     docker network disconnect trading-network "$container" 2>/dev/null || true
-    
+
     # Connect to isolated network
     docker network connect isolated-trading-network "$container" 2>/dev/null || true
 done
@@ -474,7 +474,7 @@ done
 echo "Containers isolated. External network access blocked."
 echo "To restore normal operation, run: /usr/local/bin/restore-normal-operation.sh"
 EOF
-    
+
     # Restore normal operation script
     cat > /usr/local/bin/restore-normal-operation.sh << 'EOF'
 #!/bin/bash
@@ -498,17 +498,17 @@ systemctl restart fail2ban
 
 echo "Normal operation restored."
 EOF
-    
+
     chmod +x /usr/local/bin/emergency-shutdown.sh
     chmod +x /usr/local/bin/isolate-containers.sh
     chmod +x /usr/local/bin/restore-normal-operation.sh
-    
+
     log "Emergency response scripts created successfully"
 }
 
 configure_docker_network() {
     log "Configuring Docker network security..."
-    
+
     # Create secure Docker daemon configuration
     mkdir -p /etc/docker
     cat > /etc/docker/daemon.json << 'EOF'
@@ -532,13 +532,13 @@ configure_docker_network() {
   ]
 }
 EOF
-    
+
     # Restart Docker daemon
     systemctl restart docker
-    
+
     # Wait for Docker to restart
     sleep 5
-    
+
     # Create secure trading network if it doesn't exist
     if ! docker network ls | grep -q trading-network; then
         docker network create \
@@ -551,15 +551,15 @@ EOF
             --opt com.docker.network.bridge.enable_ip_forward=false \
             trading-network
     fi
-    
+
     log "Docker network security configured successfully"
 }
 
 validate_security_setup() {
     log "Validating security setup..."
-    
+
     local validation_failed=0
-    
+
     # Check UFW status
     if ! ufw status | grep -q "Status: active"; then
         echo -e "${RED}FAIL: UFW firewall is not active${NC}"
@@ -567,7 +567,7 @@ validate_security_setup() {
     else
         echo -e "${GREEN}PASS: UFW firewall is active${NC}"
     fi
-    
+
     # Check Fail2Ban status
     if ! systemctl is-active --quiet fail2ban; then
         echo -e "${RED}FAIL: Fail2Ban is not running${NC}"
@@ -575,7 +575,7 @@ validate_security_setup() {
     else
         echo -e "${GREEN}PASS: Fail2Ban is running${NC}"
     fi
-    
+
     # Check Docker network
     if ! docker network ls | grep -q trading-network; then
         echo -e "${RED}FAIL: Trading network is not configured${NC}"
@@ -583,7 +583,7 @@ validate_security_setup() {
     else
         echo -e "${GREEN}PASS: Trading network is configured${NC}"
     fi
-    
+
     # Check monitoring service
     if ! systemctl is-active --quiet trading-bot-network-monitor; then
         echo -e "${RED}FAIL: Network monitor is not running${NC}"
@@ -591,7 +591,7 @@ validate_security_setup() {
     else
         echo -e "${GREEN}PASS: Network monitor is running${NC}"
     fi
-    
+
     # Check log directories
     if [ ! -d "/var/log/trading-bot/security" ]; then
         echo -e "${RED}FAIL: Security log directory does not exist${NC}"
@@ -599,7 +599,7 @@ validate_security_setup() {
     else
         echo -e "${GREEN}PASS: Security log directory exists${NC}"
     fi
-    
+
     if [ $validation_failed -eq 0 ]; then
         echo -e "${GREEN}All security validations passed!${NC}"
         log "Security setup validation completed successfully"
@@ -652,26 +652,26 @@ print_summary() {
 # Main execution
 main() {
     print_header
-    
+
     # Preliminary checks
     check_root
     check_system
-    
+
     # Create log file
     touch "$LOG_FILE"
     chmod 600 "$LOG_FILE"
-    
+
     # Main setup steps
     install_security_tools
     configure_ufw
-    configure_iptables_docker  
+    configure_iptables_docker
     configure_ddos_protection
     configure_fail2ban
     setup_network_monitoring
     configure_logging
     create_emergency_scripts
     configure_docker_network
-    
+
     # Validation
     if validate_security_setup; then
         print_summary

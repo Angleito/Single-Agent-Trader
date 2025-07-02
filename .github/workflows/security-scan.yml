@@ -71,12 +71,12 @@ jobs:
       contents: read
       security-events: write
       actions: read
-    
+
     outputs:
       security_status: ${{ steps.trivy-gate.outputs.security_status }}
       critical_count: ${{ steps.trivy-gate.outputs.critical_count }}
       high_count: ${{ steps.trivy-gate.outputs.high_count }}
-      
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -87,25 +87,25 @@ jobs:
       - name: Build Docker images
         run: |
           echo "Building images for security scanning..."
-          
+
           # Main trading bot image
           docker build -t ai-trading-bot:scan-${{ github.run_number }} .
-          
+
           # Bluefin service
           if [ -f "services/Dockerfile.bluefin" ]; then
             docker build -f services/Dockerfile.bluefin -t bluefin-sdk-service:scan-${{ github.run_number }} ./services
           fi
-          
+
           # MCP memory server
           if [ -f "bot/mcp/Dockerfile" ]; then
             docker build -f bot/mcp/Dockerfile -t mcp-memory-server:scan-${{ github.run_number }} ./bot/mcp
           fi
-          
+
           # MCP omnisearch server
           if [ -f "bot/mcp/omnisearch-server/Dockerfile" ]; then
             docker build -f bot/mcp/omnisearch-server/Dockerfile -t mcp-omnisearch-server:scan-${{ github.run_number }} ./bot/mcp/omnisearch-server
           fi
-          
+
           echo "Built images:"
           docker images | grep scan-${{ github.run_number }}
 
@@ -152,7 +152,7 @@ jobs:
           for image in $(docker images --format "{{.Repository}}:{{.Tag}}" | grep scan-${{ github.run_number }} | grep -v ai-trading-bot); do
             image_name=$(echo $image | cut -d: -f1 | tr '/' '-')
             echo "Scanning service image: $image"
-            
+
             # Vulnerability scan
             docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
               -v $(pwd)/security/trivy/reports/ci:/output \
@@ -161,7 +161,7 @@ jobs:
               --output /output/${image_name}-vuln.sarif \
               --severity CRITICAL,HIGH,MEDIUM \
               $image || echo "Scan failed for $image"
-            
+
             # Secret scan
             docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
               -v $(pwd)/security/trivy/reports/ci:/output \
@@ -170,7 +170,7 @@ jobs:
               --output /output/${image_name}-secrets.sarif \
               --scanners secret \
               $image || echo "Secret scan failed for $image"
-              
+
             # SBOM generation
             docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
               -v $(pwd)/security/trivy/reports/ci:/output \
@@ -184,10 +184,10 @@ jobs:
         id: trivy-gate
         run: |
           echo "Running Trivy security gate analysis..."
-          
+
           # Make scripts executable
           chmod +x security/trivy/*.sh
-          
+
           # Run the security gate with CI/CD integration
           if ./security/trivy/ci-cd-security-gate.sh \
             --max-critical 0 \
@@ -243,11 +243,11 @@ jobs:
     permissions:
       contents: read
       security-events: write
-    
+
     outputs:
       fs_security_status: ${{ steps.fs-gate.outputs.security_status }}
       secret_count: ${{ steps.fs-gate.outputs.secret_count }}
-      
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -309,10 +309,10 @@ jobs:
         id: fs-gate
         run: |
           echo "Running filesystem security gate..."
-          
+
           # Make scripts executable
           chmod +x security/trivy/*.sh
-          
+
           # Run filesystem scan with our custom script
           if ./security/trivy/scan-filesystem.sh \
             --format sarif \
@@ -383,7 +383,7 @@ jobs:
           echo "Comparing secret detection results..."
           echo "Trivy filesystem scan status: ${{ needs.filesystem-scan.outputs.fs_security_status }}"
           echo "Trivy secret count: ${{ needs.filesystem-scan.outputs.secret_count }}"
-          
+
           if [ "${{ needs.filesystem-scan.outputs.secret_count }}" -gt "0" ]; then
             echo "⚠️ Trivy found secrets in the codebase"
             echo "Check the filesystem scan artifacts for details"
@@ -474,7 +474,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [dependency-scan, container-scan, filesystem-scan, secret-scan, sast-scan, license-check, docker-lint]
     if: always()
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -498,7 +498,7 @@ jobs:
           # Add overall security status
           echo "## 🎯 Overall Security Status" >> security-summary.md
           echo "" >> security-summary.md
-          
+
           # Container security status
           container_status="${{ needs.container-scan.outputs.security_status }}"
           if [ "$container_status" == "passed" ]; then
@@ -506,7 +506,7 @@ jobs:
           else
             echo "🔴 **Container Security**: FAILED" >> security-summary.md
           fi
-          
+
           # Filesystem security status
           fs_status="${{ needs.filesystem-scan.outputs.fs_security_status }}"
           if [ "$fs_status" == "passed" ]; then
@@ -514,7 +514,7 @@ jobs:
           else
             echo "🔴 **Filesystem Security**: FAILED" >> security-summary.md
           fi
-          
+
           echo "" >> security-summary.md
 
           # Add detailed scan results
@@ -534,7 +534,7 @@ jobs:
           # Add security gate results
           echo "## 🚦 Security Gate Results" >> security-summary.md
           echo "" >> security-summary.md
-          
+
           # Critical vulnerabilities check
           critical_count="${{ needs.container-scan.outputs.critical_count || '0' }}"
           if [ "$critical_count" -eq "0" ]; then
@@ -542,7 +542,7 @@ jobs:
           else
             echo "❌ **Critical Vulnerabilities**: $critical_count found (Threshold: 0)" >> security-summary.md
           fi
-          
+
           # Secrets check
           secret_count="${{ needs.filesystem-scan.outputs.secret_count || '0' }}"
           if [ "$secret_count" -eq "0" ]; then
@@ -550,13 +550,13 @@ jobs:
           else
             echo "❌ **Secrets Detection**: $secret_count found (Threshold: 0)" >> security-summary.md
           fi
-          
+
           echo "" >> security-summary.md
 
           # Add action items
           echo "## 🎯 Action Items" >> security-summary.md
           echo "" >> security-summary.md
-          
+
           if [ "$container_status" != "passed" ] || [ "$fs_status" != "passed" ]; then
             echo "### ⚠️ Security Issues Found" >> security-summary.md
             echo "1. **Review SARIF results** in the Security tab" >> security-summary.md
@@ -571,7 +571,7 @@ jobs:
             echo "3. No secrets detected in codebase" >> security-summary.md
             echo "4. Ready for deployment" >> security-summary.md
           fi
-          
+
           echo "" >> security-summary.md
 
           # Add artifact information
@@ -583,7 +583,7 @@ jobs:
           echo "- **Python Security Reports**: Safety and Bandit analysis" >> security-summary.md
           echo "- **Additional Scans**: Grype, SAST, and license compliance" >> security-summary.md
           echo "" >> security-summary.md
-          
+
           echo "## 🔗 Resources" >> security-summary.md
           echo "" >> security-summary.md
           echo "- [GitHub Security Tab](https://github.com/${{ github.repository }}/security)" >> security-summary.md
@@ -604,29 +604,29 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            
+
             let comment = '## 🔒 Security Scan Results\n\n';
-            
+
             // Add status badges
             const containerStatus = '${{ needs.container-scan.outputs.security_status }}';
             const fsStatus = '${{ needs.filesystem-scan.outputs.fs_security_status }}';
-            
+
             const containerBadge = containerStatus === 'passed' ? '🟢 PASSED' : '🔴 FAILED';
             const fsBadge = fsStatus === 'passed' ? '🟢 PASSED' : '🔴 FAILED';
-            
+
             comment += `**Container Security**: ${containerBadge}\n`;
             comment += `**Filesystem Security**: ${fsBadge}\n\n`;
-            
+
             // Add vulnerability counts
             const criticalCount = '${{ needs.container-scan.outputs.critical_count }}' || '0';
             const highCount = '${{ needs.container-scan.outputs.high_count }}' || '0';
             const secretCount = '${{ needs.filesystem-scan.outputs.secret_count }}' || '0';
-            
+
             comment += '### 📊 Vulnerability Summary\n\n';
             comment += `- **Critical**: ${criticalCount}\n`;
             comment += `- **High**: ${highCount}\n`;
             comment += `- **Secrets**: ${secretCount}\n\n`;
-            
+
             // Add full summary if available
             try {
               const summary = fs.readFileSync('security-summary.md', 'utf8');
@@ -636,9 +636,9 @@ jobs:
             } catch (error) {
               comment += 'Full security report available in workflow artifacts.\n';
             }
-            
+
             // Add action items
-            if (containerStatus !== 'passed' || fsStatus !== 'passed' || 
+            if (containerStatus !== 'passed' || fsStatus !== 'passed' ||
                 parseInt(criticalCount) > 0 || parseInt(secretCount) > 0) {
               comment += '\n### ⚠️ Action Required\n';
               comment += '- Review security scan results before merging\n';
@@ -650,7 +650,7 @@ jobs:
               comment += '- No critical issues found\n';
               comment += '- Ready for review and merge\n';
             }
-            
+
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
@@ -661,26 +661,26 @@ jobs:
       - name: Create security gate enforcement
         run: |
           echo "Enforcing security gate policies..."
-          
+
           # Check if any critical security issues were found
           container_status="${{ needs.container-scan.outputs.security_status }}"
           fs_status="${{ needs.filesystem-scan.outputs.fs_security_status }}"
           critical_count="${{ needs.container-scan.outputs.critical_count || '0' }}"
           secret_count="${{ needs.filesystem-scan.outputs.secret_count || '0' }}"
-          
+
           if [ "$container_status" != "passed" ] || [ "$fs_status" != "passed" ]; then
             echo "❌ Security gate failed - blocking deployment"
             exit 1
           fi
-          
+
           if [ "$critical_count" -gt "0" ]; then
             echo "❌ Critical vulnerabilities found - blocking deployment"
             exit 1
           fi
-          
+
           if [ "$secret_count" -gt "0" ]; then
             echo "❌ Secrets found in codebase - blocking deployment"
             exit 1
           fi
-          
+
           echo "✅ Security gate passed - deployment approved"

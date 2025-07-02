@@ -13,10 +13,10 @@
     (proc.name in (docker, dockerd, containerd, runc, crun) or
      proc.args contains "docker" or
      proc.args contains "containerd") and
-    not container.name in (ai-trading-bot, bluefin-service, dashboard-backend, 
+    not container.name in (ai-trading-bot, bluefin-service, dashboard-backend,
                           mcp-memory, mcp-omnisearch, dashboard-frontend, dashboard-nginx)
   output: >
-    Container runtime modification detected 
+    Container runtime modification detected
     (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [container, runtime, modification]
@@ -25,14 +25,14 @@
 - rule: Container Namespace Escape
   desc: Detect attempts to escape container via namespace manipulation
   condition: >
-    container.name in (ai-trading-bot, bluefin-service, dashboard-backend, 
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend,
                       mcp-memory, mcp-omnisearch) and
     ((spawned_process and proc.name in (nsenter, unshare)) or
-     (open_write and (fd.name startswith "/proc/sys/" or 
+     (open_write and (fd.name startswith "/proc/sys/" or
                       fd.name startswith "/proc/self/ns/" or
                       fd.name startswith "/sys/fs/cgroup/")))
   output: >
-    Container namespace escape attempt 
+    Container namespace escape attempt
     (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [container, escape, namespace]
@@ -42,7 +42,7 @@
   desc: Detect unauthorized container image pull/push operations
   condition: >
     spawned_process and
-    (proc.args contains "docker pull" or 
+    (proc.args contains "docker pull" or
      proc.args contains "docker push" or
      proc.args contains "docker build" or
      proc.args contains "docker commit") and
@@ -51,7 +51,7 @@
     not proc.args contains "mcp-memory" and
     not proc.args contains "mcp-omnisearch"
   output: >
-    Unauthorized container image operation 
+    Unauthorized container image operation
     (user=%user.name command=%proc.cmdline)
   priority: WARNING
   tags: [container, image, unauthorized]
@@ -72,7 +72,7 @@
     not proc.args contains "/app/config" and
     not proc.args contains "/app/tmp"
   output: >
-    Unauthorized host volume mount 
+    Unauthorized host volume mount
     (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [container, mount, unauthorized]
@@ -81,12 +81,12 @@
 - rule: Docker Socket Access
   desc: Detect access to Docker socket from containers
   condition: >
-    container.name in (ai-trading-bot, bluefin-service, dashboard-backend, 
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend,
                       mcp-memory, mcp-omnisearch) and
     (open_read or open_write) and
     fd.name="/var/run/docker.sock"
   output: >
-    Docker socket access from container 
+    Docker socket access from container
     (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [container, docker-socket, security]
@@ -100,7 +100,7 @@
     (fd.name startswith "/tmp/" or fd.name startswith "/var/tmp/") and
     not proc.name in (python, python3, node, nginx)
   output: >
-    Unauthorized tmpfs modification 
+    Unauthorized tmpfs modification
     (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
   priority: WARNING
   tags: [container, tmpfs, modification]
@@ -115,10 +115,10 @@
   condition: >
     container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
     ((spawned_process and proc.name in (iptables, netfilter, tc, ip)) or
-     (open_write and (fd.name startswith "/proc/net/" or 
+     (open_write and (fd.name startswith "/proc/net/" or
                       fd.name startswith "/sys/class/net/")))
   output: >
-    Container network configuration change 
+    Container network configuration change
     (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
   priority: ALERT
   tags: [container, network, configuration]
@@ -128,18 +128,18 @@
   desc: Detect unauthorized communication between containers
   condition: >
     outbound and
-    container.name in (ai-trading-bot, bluefin-service, dashboard-backend, 
+    container.name in (ai-trading-bot, bluefin-service, dashboard-backend,
                       mcp-memory, mcp-omnisearch) and
-    not ((container.name="ai-trading-bot" and 
+    not ((container.name="ai-trading-bot" and
           fd.rip_name in (bluefin-service, mcp-memory, mcp-omnisearch, dashboard-backend)) or
-         (container.name="dashboard-backend" and 
+         (container.name="dashboard-backend" and
           fd.rip_name in (ai-trading-bot, bluefin-service)) or
-         (container.name="bluefin-service" and 
+         (container.name="bluefin-service" and
           fd.rip_name in (ai-trading-bot, dashboard-backend))) and
     fd.rip startswith "172." and
     not fd.rport in (80, 443, 8000, 8080, 8765, 8767)
   output: >
-    Unauthorized container communication 
+    Unauthorized container communication
     (user=%user.name connection=%fd.rip:%fd.rport source=%container.name)
   priority: WARNING
   tags: [container, network, unauthorized]
@@ -158,7 +158,7 @@
                       fd.name startswith "/proc/sys/vm/" or
                       fd.name startswith "/proc/sys/kernel/")))
   output: >
-    Container resource limit bypass attempt 
+    Container resource limit bypass attempt
     (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [container, resource, bypass]
@@ -171,7 +171,7 @@
     container.memory.used > 85 and
     spawned_process
   output: >
-    Container memory exhaustion detected 
+    Container memory exhaustion detected
     (user=%user.name command=%proc.cmdline memory_used=%container.memory.used container=%container.name image=%container.image.repository)
   priority: WARNING
   tags: [container, memory, exhaustion]
@@ -184,7 +184,7 @@
     container.cpu.usage > 90 and
     not proc.name in (python, python3, node)
   output: >
-    Container CPU anomaly detected 
+    Container CPU anomaly detected
     (user=%user.name command=%proc.cmdline cpu_usage=%container.cpu.usage container=%container.name image=%container.image.repository)
   priority: WARNING
   tags: [container, cpu, anomaly]
@@ -199,13 +199,13 @@
   condition: >
     container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
     spawned_process and
-    (proc.args contains "export" or 
+    (proc.args contains "export" or
      proc.args contains "unset" or
      proc.args contains "PYTHONPATH" or
      proc.args contains "PATH=") and
     not proc.name in (python, python3, sh, bash)
   output: >
-    Container environment modification 
+    Container environment modification
     (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: WARNING
   tags: [container, environment, modification]
@@ -216,11 +216,11 @@
   condition: >
     container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
     ((spawned_process and proc.name in (usermod, groupmod, passwd, chpasswd)) or
-     (open_write and (fd.name="/etc/passwd" or 
-                      fd.name="/etc/shadow" or 
+     (open_write and (fd.name="/etc/passwd" or
+                      fd.name="/etc/shadow" or
                       fd.name="/etc/group")))
   output: >
-    Container user modification attempt 
+    Container user modification attempt
     (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [container, user, modification]
@@ -235,13 +235,13 @@
   condition: >
     container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
     (open_write or rename or unlink) and
-    (fd.name startswith "/usr/bin/" or 
+    (fd.name startswith "/usr/bin/" or
      fd.name startswith "/usr/local/bin/" or
      fd.name startswith "/app/bot/" or
      fd.name startswith "/app/bin/") and
     not proc.name in (python, python3, pip, pip3)
   output: >
-    Container binary modification 
+    Container binary modification
     (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [container, binary, modification]
@@ -252,13 +252,13 @@
   condition: >
     container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
     (open_write or rename or unlink) and
-    (fd.name startswith "/usr/lib/" or 
+    (fd.name startswith "/usr/lib/" or
      fd.name startswith "/lib/" or
      fd.name contains ".so" or
      fd.name contains "site-packages") and
     not proc.name in (python, python3, pip, pip3)
   output: >
-    Container library modification 
+    Container library modification
     (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
   priority: ALERT
   tags: [container, library, modification]
@@ -277,7 +277,7 @@
     not proc.args contains "ps" and
     not proc.args contains "exec"
   output: >
-    Unauthorized Docker Compose operation 
+    Unauthorized Docker Compose operation
     (user=%user.name command=%proc.cmdline)
   priority: WARNING
   tags: [container, compose, unauthorized]
@@ -288,15 +288,15 @@
   condition: >
     spawned_process and
     proc.args contains "docker" and
-    (proc.args contains "stop" or 
-     proc.args contains "start" or 
+    (proc.args contains "stop" or
+     proc.args contains "start" or
      proc.args contains "restart" or
      proc.args contains "kill") and
     (proc.args contains "ai-trading-bot" or
      proc.args contains "bluefin-service" or
      proc.args contains "dashboard")
   output: >
-    Container lifecycle operation 
+    Container lifecycle operation
     (user=%user.name command=%proc.cmdline operation=%proc.args)
   priority: INFORMATIONAL
   tags: [container, lifecycle, audit]
@@ -311,7 +311,7 @@
   condition: >
     container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
     spawned_process and
-    (proc.args contains "API_KEY" or 
+    (proc.args contains "API_KEY" or
      proc.args contains "SECRET" or
      proc.args contains "PASSWORD" or
      proc.args contains "TOKEN" or
@@ -319,7 +319,7 @@
     not proc.args contains "***" and
     not proc.name in (python, python3)
   output: >
-    Potential secret exposure in container 
+    Potential secret exposure in container
     (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: WARNING
   tags: [container, secret, exposure]
@@ -336,7 +336,7 @@
      fd.name contains ".env") and
     not proc.name in (python, python3)
   output: >
-    Unauthorized secret file access 
+    Unauthorized secret file access
     (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
   priority: ALERT
   tags: [container, secret, unauthorized-access]
@@ -356,7 +356,7 @@
      proc.args contains "fork()" or
      proc.args contains "infinite")
   output: >
-    Potential container performance attack 
+    Potential container performance attack
     (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [container, performance, attack]
@@ -372,7 +372,7 @@
      proc.args contains "truncate") and
     proc.args contains "/app/"
   output: >
-    Container disk exhaustion attempt 
+    Container disk exhaustion attempt
     (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: WARNING
   tags: [container, disk, exhaustion]
@@ -394,7 +394,7 @@
     not proc.args contains "ai-trading-bot" and
     not proc.args contains "bluefin-service"
   output: >
-    Unauthorized trading container spawn attempt 
+    Unauthorized trading container spawn attempt
     (user=%user.name command=%proc.cmdline)
   priority: CRITICAL
   tags: [container, trading, unauthorized]
@@ -408,7 +408,7 @@
     proc.args contains "healthcheck" and
     proc.args contains "fail"
   output: >
-    Trading container health check failure 
+    Trading container health check failure
     (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: WARNING
   tags: [container, health, failure]

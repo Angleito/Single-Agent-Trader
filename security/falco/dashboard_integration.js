@@ -6,7 +6,7 @@
 // Security Event Types
 const SecurityEventTypes = {
     CRITICAL: 'CRITICAL',
-    EMERGENCY: 'EMERGENCY', 
+    EMERGENCY: 'EMERGENCY',
     ALERT: 'ALERT',
     WARNING: 'WARNING',
     NOTICE: 'NOTICE',
@@ -34,7 +34,7 @@ class SecurityMonitor {
             alertThreshold: config.alertThreshold || 70,
             ...config
         };
-        
+
         this.events = [];
         this.metrics = {
             totalEvents: 0,
@@ -43,29 +43,29 @@ class SecurityMonitor {
             warningEvents: 0,
             securityScore: 100
         };
-        
+
         this.callbacks = {
             onSecurityEvent: [],
             onMetricsUpdate: [],
             onSecurityScoreChange: []
         };
-        
+
         this.isRunning = false;
         this.refreshTimer = null;
-        
+
         this.init();
     }
-    
+
     init() {
         this.createSecurityWidget();
         this.setupEventListeners();
-        
+
         // Start monitoring if auto-start is enabled
         if (this.config.autoStart !== false) {
             this.startMonitoring();
         }
     }
-    
+
     createSecurityWidget() {
         // Create security monitoring widget for dashboard
         const securityWidget = document.createElement('div');
@@ -79,7 +79,7 @@ class SecurityMonitor {
                     <span id="security-status-text">Initializing...</span>
                 </div>
             </div>
-            
+
             <div class="security-metrics">
                 <div class="metric-card">
                     <span class="metric-value" id="security-score">100</span>
@@ -98,7 +98,7 @@ class SecurityMonitor {
                     <span class="metric-label">Alerts</span>
                 </div>
             </div>
-            
+
             <div class="security-events">
                 <div class="events-header">
                     <h4>Recent Security Events</h4>
@@ -108,22 +108,22 @@ class SecurityMonitor {
                     <div class="no-events">No security events</div>
                 </div>
             </div>
-            
+
             <div class="security-actions">
                 <button id="emergency-stop-btn" class="btn-emergency">Emergency Stop</button>
                 <button id="isolate-containers-btn" class="btn-warning">Isolate Containers</button>
                 <button id="view-details-btn" class="btn-primary">View Details</button>
             </div>
         `;
-        
+
         // Add to dashboard
         const dashboardContainer = document.querySelector('.dashboard-widgets') || document.body;
         dashboardContainer.appendChild(securityWidget);
-        
+
         // Add CSS styles
         this.addSecurityStyles();
     }
-    
+
     addSecurityStyles() {
         const styles = `
             .security-widget {
@@ -135,7 +135,7 @@ class SecurityMonitor {
                 color: #ffffff;
                 font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
             }
-            
+
             .security-header {
                 display: flex;
                 justify-content: space-between;
@@ -144,18 +144,18 @@ class SecurityMonitor {
                 border-bottom: 1px solid #333;
                 padding-bottom: 8px;
             }
-            
+
             .security-header h3 {
                 margin: 0;
                 color: #00ff88;
             }
-            
+
             .security-status {
                 display: flex;
                 align-items: center;
                 gap: 8px;
             }
-            
+
             .status-indicator {
                 width: 12px;
                 height: 12px;
@@ -163,24 +163,24 @@ class SecurityMonitor {
                 background: #00ff88;
                 animation: pulse 2s infinite;
             }
-            
+
             .status-indicator.warning { background: #ffaa00; }
             .status-indicator.critical { background: #ff4444; }
             .status-indicator.offline { background: #666666; }
-            
+
             @keyframes pulse {
                 0% { opacity: 1; }
                 50% { opacity: 0.5; }
                 100% { opacity: 1; }
             }
-            
+
             .security-metrics {
                 display: grid;
                 grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
                 gap: 12px;
                 margin-bottom: 16px;
             }
-            
+
             .metric-card {
                 background: #2a2a2a;
                 border: 1px solid #444;
@@ -188,10 +188,10 @@ class SecurityMonitor {
                 padding: 12px;
                 text-align: center;
             }
-            
+
             .metric-card.critical { border-color: #ff4444; }
             .metric-card.alert { border-color: #ffaa00; }
-            
+
             .metric-value {
                 display: block;
                 font-size: 24px;
@@ -199,31 +199,31 @@ class SecurityMonitor {
                 color: #00ff88;
                 margin-bottom: 4px;
             }
-            
+
             .metric-card.critical .metric-value { color: #ff4444; }
             .metric-card.alert .metric-value { color: #ffaa00; }
-            
+
             .metric-label {
                 font-size: 12px;
                 color: #cccccc;
             }
-            
+
             .security-events {
                 margin-bottom: 16px;
             }
-            
+
             .events-header {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
                 margin-bottom: 8px;
             }
-            
+
             .events-header h4 {
                 margin: 0;
                 color: #cccccc;
             }
-            
+
             .events-list {
                 max-height: 200px;
                 overflow-y: auto;
@@ -231,59 +231,59 @@ class SecurityMonitor {
                 border-radius: 4px;
                 background: #222;
             }
-            
+
             .security-event {
                 padding: 8px 12px;
                 border-bottom: 1px solid #333;
                 font-size: 12px;
             }
-            
+
             .security-event:last-child {
                 border-bottom: none;
             }
-            
+
             .security-event.critical {
                 background: rgba(255, 68, 68, 0.1);
                 border-left: 4px solid #ff4444;
             }
-            
+
             .security-event.alert {
                 background: rgba(255, 170, 0, 0.1);
                 border-left: 4px solid #ffaa00;
             }
-            
+
             .security-event.warning {
                 background: rgba(255, 255, 0, 0.1);
                 border-left: 4px solid #ffff00;
             }
-            
+
             .event-time {
                 color: #888;
                 float: right;
             }
-            
+
             .event-rule {
                 font-weight: bold;
                 color: #00ff88;
                 margin-bottom: 4px;
             }
-            
+
             .event-details {
                 color: #cccccc;
             }
-            
+
             .no-events {
                 padding: 20px;
                 text-align: center;
                 color: #666;
             }
-            
+
             .security-actions {
                 display: flex;
                 gap: 8px;
                 flex-wrap: wrap;
             }
-            
+
             .btn-emergency {
                 background: #ff4444;
                 color: white;
@@ -294,11 +294,11 @@ class SecurityMonitor {
                 font-size: 12px;
                 font-weight: bold;
             }
-            
+
             .btn-emergency:hover {
                 background: #ff6666;
             }
-            
+
             .btn-warning {
                 background: #ffaa00;
                 color: black;
@@ -309,11 +309,11 @@ class SecurityMonitor {
                 font-size: 12px;
                 font-weight: bold;
             }
-            
+
             .btn-warning:hover {
                 background: #ffcc33;
             }
-            
+
             .btn-primary {
                 background: #0066cc;
                 color: white;
@@ -323,11 +323,11 @@ class SecurityMonitor {
                 cursor: pointer;
                 font-size: 12px;
             }
-            
+
             .btn-primary:hover {
                 background: #0088ff;
             }
-            
+
             .btn-small {
                 background: #444;
                 color: white;
@@ -337,80 +337,80 @@ class SecurityMonitor {
                 cursor: pointer;
                 font-size: 10px;
             }
-            
+
             .btn-small:hover {
                 background: #666;
             }
         `;
-        
+
         const styleSheet = document.createElement('style');
         styleSheet.textContent = styles;
         document.head.appendChild(styleSheet);
     }
-    
+
     setupEventListeners() {
         // Clear events button
         document.getElementById('clear-events-btn')?.addEventListener('click', () => {
             this.clearEvents();
         });
-        
+
         // Emergency stop button
         document.getElementById('emergency-stop-btn')?.addEventListener('click', () => {
             this.handleEmergencyStop();
         });
-        
+
         // Isolate containers button
         document.getElementById('isolate-containers-btn')?.addEventListener('click', () => {
             this.handleIsolateContainers();
         });
-        
+
         // View details button
         document.getElementById('view-details-btn')?.addEventListener('click', () => {
             this.openSecurityDashboard();
         });
     }
-    
+
     startMonitoring() {
         if (this.isRunning) return;
-        
+
         this.isRunning = true;
         this.updateStatus('Monitoring...', 'normal');
-        
+
         // Initial data fetch
         this.fetchSecurityData();
-        
+
         // Set up periodic refresh
         this.refreshTimer = setInterval(() => {
             this.fetchSecurityData();
         }, this.config.refreshInterval);
-        
+
         console.log('Security monitoring started');
     }
-    
+
     stopMonitoring() {
         if (!this.isRunning) return;
-        
+
         this.isRunning = false;
-        
+
         if (this.refreshTimer) {
             clearInterval(this.refreshTimer);
             this.refreshTimer = null;
         }
-        
+
         this.updateStatus('Stopped', 'offline');
         console.log('Security monitoring stopped');
     }
-    
+
     async fetchSecurityData() {
         try {
             // Fetch recent events
             const eventsResponse = await fetch(`${this.config.apiEndpoint}/events?limit=20`);
             const eventsData = await eventsResponse.json();
-            
+
             if (eventsData.events) {
                 this.processEvents(eventsData.events);
             }
-            
+
             // Fetch metrics (if available)
             try {
                 const metricsResponse = await fetch(`${this.config.apiEndpoint}/metrics`);
@@ -421,48 +421,48 @@ class SecurityMonitor {
             } catch (e) {
                 // Metrics endpoint might not be available
             }
-            
+
             this.updateStatus('Active', 'normal');
-            
+
         } catch (error) {
             console.error('Failed to fetch security data:', error);
             this.updateStatus('Error', 'critical');
         }
     }
-    
+
     processEvents(events) {
         // Sort events by timestamp (newest first)
-        const sortedEvents = events.sort((a, b) => 
+        const sortedEvents = events.sort((a, b) =>
             new Date(b.timestamp) - new Date(a.timestamp)
         );
-        
+
         // Update events list
         this.events = sortedEvents.slice(0, this.config.maxEvents);
-        
+
         // Update metrics
         this.updateMetrics();
-        
+
         // Update UI
         this.updateEventsDisplay();
-        
+
         // Check for high-priority events
         this.checkSecurityAlerts();
-        
+
         // Trigger callbacks
         this.callbacks.onSecurityEvent.forEach(callback => {
             callback(this.events);
         });
     }
-    
+
     processMetrics(metricsText) {
         // Parse Prometheus metrics format
         const lines = metricsText.split('\n');
-        
+
         for (const line of lines) {
             if (line.startsWith('#')) continue;
-            
+
             const [metricName, value] = line.split(' ');
-            
+
             if (metricName?.includes('falco_trading_bot_security_score')) {
                 const score = parseFloat(value);
                 if (!isNaN(score)) {
@@ -470,24 +470,24 @@ class SecurityMonitor {
                 }
             }
         }
-        
+
         this.updateMetricsDisplay();
     }
-    
+
     updateMetrics() {
-        const criticalEvents = this.events.filter(e => 
-            e.original_event.priority === 'CRITICAL' || 
+        const criticalEvents = this.events.filter(e =>
+            e.original_event.priority === 'CRITICAL' ||
             e.original_event.priority === 'EMERGENCY'
         ).length;
-        
-        const alertEvents = this.events.filter(e => 
+
+        const alertEvents = this.events.filter(e =>
             e.original_event.priority === 'ALERT'
         ).length;
-        
-        const warningEvents = this.events.filter(e => 
+
+        const warningEvents = this.events.filter(e =>
             e.original_event.priority === 'WARNING'
         ).length;
-        
+
         this.metrics = {
             ...this.metrics,
             totalEvents: this.events.length,
@@ -495,7 +495,7 @@ class SecurityMonitor {
             alertEvents,
             warningEvents
         };
-        
+
         // Calculate security score based on recent events
         if (criticalEvents > 0) {
             this.metrics.securityScore = Math.max(0, 100 - (criticalEvents * 20) - (alertEvents * 10) - (warningEvents * 5));
@@ -506,16 +506,16 @@ class SecurityMonitor {
         } else {
             this.metrics.securityScore = Math.min(100, this.metrics.securityScore + 1);
         }
-        
+
         this.updateMetricsDisplay();
     }
-    
+
     updateMetricsDisplay() {
         document.getElementById('security-score').textContent = Math.round(this.metrics.securityScore);
         document.getElementById('total-events').textContent = this.metrics.totalEvents;
         document.getElementById('critical-events').textContent = this.metrics.criticalEvents;
         document.getElementById('alert-events').textContent = this.metrics.alertEvents;
-        
+
         // Update security score color
         const scoreElement = document.getElementById('security-score');
         if (this.metrics.securityScore >= 80) {
@@ -525,74 +525,74 @@ class SecurityMonitor {
         } else {
             scoreElement.style.color = '#ff4444';
         }
-        
+
         // Trigger callbacks
         this.callbacks.onMetricsUpdate.forEach(callback => {
             callback(this.metrics);
         });
     }
-    
+
     updateEventsDisplay() {
         const eventsList = document.getElementById('security-events-list');
-        
+
         if (this.events.length === 0) {
             eventsList.innerHTML = '<div class="no-events">No security events</div>';
             return;
         }
-        
+
         const eventsHtml = this.events.slice(0, 10).map(event => {
             const timestamp = new Date(event.timestamp).toLocaleTimeString();
             const priority = event.original_event.priority.toLowerCase();
-            
+
             return `
                 <div class="security-event ${priority}">
                     <div class="event-time">${timestamp}</div>
                     <div class="event-rule">${event.original_event.rule}</div>
                     <div class="event-details">
-                        Container: ${event.original_event.output_fields.container_name || 'Unknown'} | 
+                        Container: ${event.original_event.output_fields.container_name || 'Unknown'} |
                         Score: ${event.severity_score}/100
                     </div>
                 </div>
             `;
         }).join('');
-        
+
         eventsList.innerHTML = eventsHtml;
     }
-    
+
     updateStatus(text, type) {
         const statusText = document.getElementById('security-status-text');
         const statusIndicator = document.getElementById('security-status-indicator');
-        
+
         if (statusText) statusText.textContent = text;
         if (statusIndicator) {
             statusIndicator.className = `status-indicator ${type}`;
         }
     }
-    
+
     checkSecurityAlerts() {
         const recentCriticalEvents = this.events.filter(event => {
             const eventTime = new Date(event.timestamp);
             const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-            return eventTime > fiveMinutesAgo && 
-                   (event.original_event.priority === 'CRITICAL' || 
+            return eventTime > fiveMinutesAgo &&
+                   (event.original_event.priority === 'CRITICAL' ||
                     event.original_event.priority === 'EMERGENCY');
         });
-        
+
         if (recentCriticalEvents.length > 0) {
             this.showSecurityAlert(recentCriticalEvents);
         }
-        
+
         // Check security score threshold
         if (this.metrics.securityScore < this.config.alertThreshold) {
             this.showSecurityScoreAlert();
         }
     }
-    
+
     showSecurityAlert(events) {
         const alertMessage = `🚨 Critical Security Alert!\n\n${events.length} critical security event(s) detected:\n\n${
             events.map(e => `• ${e.original_event.rule}`).join('\n')
         }\n\nImmediate action may be required.`;
-        
+
         // Show browser notification if permitted
         if (Notification.permission === 'granted') {
             new Notification('Security Alert', {
@@ -601,28 +601,28 @@ class SecurityMonitor {
                 requireInteraction: true
             });
         }
-        
+
         // Update status
         this.updateStatus('Security Alert!', 'critical');
-        
+
         console.warn('Security Alert:', events);
     }
-    
+
     showSecurityScoreAlert() {
         this.updateStatus(`Low Security Score: ${Math.round(this.metrics.securityScore)}`, 'warning');
     }
-    
+
     clearEvents() {
         this.events = [];
         this.updateEventsDisplay();
         this.updateMetrics();
     }
-    
+
     async handleEmergencyStop() {
         if (!confirm('Are you sure you want to trigger an emergency stop? This will halt all trading operations.')) {
             return;
         }
-        
+
         try {
             // Send emergency stop signal to trading bot
             const response = await fetch('/api/emergency/stop', {
@@ -630,7 +630,7 @@ class SecurityMonitor {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ reason: 'Security emergency stop' })
             });
-            
+
             if (response.ok) {
                 alert('Emergency stop activated successfully');
             } else {
@@ -641,19 +641,19 @@ class SecurityMonitor {
             alert('Emergency stop failed: ' + error.message);
         }
     }
-    
+
     async handleIsolateContainers() {
         if (!confirm('Are you sure you want to isolate trading containers? This will disconnect them from the network.')) {
             return;
         }
-        
+
         try {
             const response = await fetch('/api/security/isolate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ containers: ['ai-trading-bot', 'bluefin-service'] })
             });
-            
+
             if (response.ok) {
                 alert('Containers isolated successfully');
             } else {
@@ -664,19 +664,19 @@ class SecurityMonitor {
             alert('Container isolation failed: ' + error.message);
         }
     }
-    
+
     openSecurityDashboard() {
         // Open security monitoring dashboard in new tab
         window.open('http://localhost:8080', '_blank');
     }
-    
+
     // Public API methods
     addEventListener(eventType, callback) {
         if (this.callbacks[eventType]) {
             this.callbacks[eventType].push(callback);
         }
     }
-    
+
     removeEventListener(eventType, callback) {
         if (this.callbacks[eventType]) {
             const index = this.callbacks[eventType].indexOf(callback);
@@ -685,15 +685,15 @@ class SecurityMonitor {
             }
         }
     }
-    
+
     getMetrics() {
         return { ...this.metrics };
     }
-    
+
     getEvents() {
         return [...this.events];
     }
-    
+
     getSecurityScore() {
         return this.metrics.securityScore;
     }
@@ -705,7 +705,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
     }
-    
+
     // Initialize security monitor
     window.securityMonitor = new SecurityMonitor({
         apiEndpoint: 'http://localhost:8080',
@@ -713,7 +713,7 @@ document.addEventListener('DOMContentLoaded', () => {
         alertThreshold: 70,
         autoStart: true
     });
-    
+
     console.log('Security monitoring dashboard integration loaded');
 });
 

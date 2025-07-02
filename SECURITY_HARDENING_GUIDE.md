@@ -181,15 +181,15 @@ services:
     image: ai-trading-bot:latest
     # Run as non-root user
     user: "1000:1000"
-    
+
     # Read-only root filesystem
     read_only: true
-    
+
     # Security options
     security_opt:
       - no-new-privileges:true
       - seccomp:unconfined
-    
+
     # Resource limits
     deploy:
       resources:
@@ -199,7 +199,7 @@ services:
         reservations:
           cpus: '1'
           memory: 1G
-    
+
     # Health check
     healthcheck:
       test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
@@ -207,23 +207,23 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-    
+
     # Mount required volumes
     volumes:
       - ./logs:/app/logs:rw
       - ./data:/app/data:rw
       - /tmp:/tmp:rw  # For temporary files
-    
+
     # Use secrets instead of environment variables
     secrets:
       - coinbase_api_key
       - coinbase_private_key
       - openai_api_key
-    
+
     # Network isolation
     networks:
       - internal
-    
+
     # Drop all capabilities and add only required ones
     cap_drop:
       - ALL
@@ -357,7 +357,7 @@ services:
   ai-trading-bot:
     networks:
       - backend
-  
+
   nginx:
     networks:
       - frontend
@@ -414,7 +414,7 @@ services:
       - /var/log:/var/log:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
     command: -config.file=/etc/promtail/config.yml
-    
+
   loki:
     image: grafana/loki:latest
     ports:
@@ -449,7 +449,7 @@ import logging
 class SecurityAlertManager:
     def __init__(self, webhook_url):
         self.webhook_url = webhook_url
-        
+
     def send_alert(self, message, severity="warning"):
         """Send security alert to webhook"""
         payload = {

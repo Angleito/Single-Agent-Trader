@@ -40,7 +40,7 @@ services:
       - ALL
     cap_add:
       - NET_BIND_SERVICE
-    
+
     # Secure temporary filesystems
     tmpfs:
       - /tmp:noexec,nosuid,nodev,size=50m
@@ -133,7 +133,7 @@ services:
       - ALL
     cap_add:
       - NET_BIND_SERVICE
-    
+
     # Secure temporary filesystems with encryption support
     tmpfs:
       - /tmp:noexec,nosuid,nodev,size=150m
@@ -149,14 +149,14 @@ services:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONWARNINGS=ignore::UserWarning,ignore::DeprecationWarning
-      
+
       # Encryption configuration
       - ENABLE_ENCRYPTION=true
       - ENCRYPTION_AT_REST=true
       - ENCRYPTED_LOGS=true
       - ENCRYPTED_DATA=true
       - ENCRYPTED_CONFIG=true
-      
+
       # Functional Programming Runtime Configuration
       - FP_RUNTIME_ENABLED=${FP_RUNTIME_ENABLED:-true}
       - FP_RUNTIME_MODE=${FP_RUNTIME_MODE:-hybrid}
@@ -164,25 +164,25 @@ services:
       - FP_MAX_CONCURRENT_EFFECTS=${FP_MAX_CONCURRENT_EFFECTS:-25}
       - FP_ERROR_RECOVERY=${FP_ERROR_RECOVERY:-true}
       - FP_METRICS_ENABLED=${FP_METRICS_ENABLED:-true}
-      
+
       # Performance Monitoring
       - ENABLE_MONITORING=${ENABLE_MONITORING:-true}
       - MONITOR_INTERVAL=${MONITOR_INTERVAL:-30}
       - METRICS_PORT=${METRICS_PORT:-9091}
-      
+
       # System Configuration
       - SYSTEM__DRY_RUN=${SYSTEM__DRY_RUN:-true}
       - SYSTEM__ENVIRONMENT=${SYSTEM__ENVIRONMENT:-development}
       - EXCHANGE__EXCHANGE_TYPE=${EXCHANGE__EXCHANGE_TYPE:-bluefin}
-      
+
       # MCP Memory Configuration
       - MCP_ENABLED=${MCP_ENABLED:-true}
       - MCP_SERVER_URL=http://mcp-memory:8765
-      
+
       # WebSocket Publishing Configuration
       - SYSTEM__ENABLE_WEBSOCKET_PUBLISHING=${SYSTEM__ENABLE_WEBSOCKET_PUBLISHING:-true}
       - SYSTEM__WEBSOCKET_DASHBOARD_URL=${SYSTEM__WEBSOCKET_DASHBOARD_URL:-ws://dashboard-backend:8000/ws}
-      
+
       # Security settings
       - SECURE_MODE=true
       - ENABLE_AUDIT_LOGGING=true
@@ -253,7 +253,7 @@ services:
       - apparmor:docker-default
     cap_drop:
       - ALL
-    
+
     tmpfs:
       - /tmp:noexec,nosuid,nodev,size=75m
       - /var/tmp:noexec,nosuid,nodev,size=25m
@@ -326,7 +326,7 @@ services:
       - apparmor:docker-default
     cap_drop:
       - ALL
-    
+
     tmpfs:
       - /tmp:noexec,nosuid,nodev,size=75m
       - /var/tmp:noexec,nosuid,nodev,size=25m
@@ -398,7 +398,7 @@ services:
       - ALL
     cap_add:
       - NET_BIND_SERVICE
-    
+
     tmpfs:
       - /tmp:noexec,nosuid,nodev,size=50m
 
@@ -432,20 +432,20 @@ services:
     restart: unless-stopped
     depends_on:
       - bluefin-service
-    
+
     healthcheck:
       test: ["CMD", "curl", "-f", "--connect-timeout", "10", "http://localhost:8000/health"]
       interval: 45s
       timeout: 15s
       retries: 3
       start_period: 20s
-    
+
     networks:
       trading-network:
         aliases:
           - dashboard-backend
           - api
-    
+
     deploy:
       resources:
         limits:
@@ -454,7 +454,7 @@ services:
         reservations:
           memory: 192M
           cpus: '0.03'
-    
+
     logging:
       driver: "json-file"
       options:
@@ -482,7 +482,7 @@ services:
       - ALL
     cap_add:
       - NET_BIND_SERVICE
-    
+
     tmpfs:
       - /tmp:noexec,nosuid,nodev,size=100m
 
@@ -498,16 +498,16 @@ services:
       - HTTPS_ONLY=false
 
     restart: unless-stopped
-    
+
     networks:
       trading-network:
         aliases:
           - dashboard-frontend
           - frontend
-    
+
     depends_on:
       - dashboard-backend
-    
+
     deploy:
       resources:
         limits:
@@ -516,7 +516,7 @@ services:
         reservations:
           memory: 128M
           cpus: '0.02'
-    
+
     logging:
       driver: "json-file"
       options:
@@ -528,7 +528,7 @@ services:
     image: alpine:latest
     container_name: backup-service
     restart: "no"
-    
+
     # SECURITY HARDENING
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     read_only: true
@@ -538,7 +538,7 @@ services:
       - apparmor:docker-default
     cap_drop:
       - ALL
-    
+
     tmpfs:
       - /tmp:noexec,nosuid,nodev,size=100m
 

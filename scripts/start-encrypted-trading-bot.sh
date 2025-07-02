@@ -68,7 +68,7 @@ check_user() {
     else
         log "Running as user $(whoami) - checking Docker permissions..."
         PRIVILEGED_MODE=false
-        
+
         # Check if user is in docker group
         if ! groups | grep -q docker; then
             error "User $(whoami) is not in docker group"
@@ -98,16 +98,16 @@ check_emergency_stop() {
 # Verify encrypted volumes are ready
 verify_encrypted_volumes() {
     log "Verifying encrypted volumes..."
-    
+
     local volumes=("data" "logs" "config" "backup")
     local all_mounted=true
-    
+
     for volume in "${volumes[@]}"; do
         local mount_point="/mnt/trading-$volume"
-        
+
         if mountpoint -q "$mount_point" 2>/dev/null; then
             log "✓ Volume mounted: trading-$volume"
-            
+
             # Check if writable
             if [ -w "$mount_point" ]; then
                 log "✓ Volume writable: trading-$volume"
@@ -120,7 +120,7 @@ verify_encrypted_volumes() {
             all_mounted=false
         fi
     done
-    
+
     if ! $all_mounted; then
         error "Some encrypted volumes are not ready"
         if $PRIVILEGED_MODE; then
@@ -145,7 +145,7 @@ verify_encrypted_volumes() {
 # Check encryption key status
 check_encryption_keys() {
     log "Checking encryption key status..."
-    
+
     if $PRIVILEGED_MODE; then
         "$SCRIPT_DIR/manage-encryption-keys.sh" check-age || {
             warning "Some encryption keys may need attention"
@@ -159,7 +159,7 @@ check_encryption_keys() {
 # Verify Docker environment
 verify_docker_environment() {
     log "Verifying Docker environment..."
-    
+
     # Check Docker is running
     if ! docker info >/dev/null 2>&1; then
         error "Docker is not running or accessible"
@@ -175,13 +175,13 @@ verify_docker_environment() {
             return 1
         fi
     fi
-    
+
     # Check Docker Compose is available
     if ! command -v docker-compose >/dev/null 2>&1; then
         error "Docker Compose not found"
         return 1
     fi
-    
+
     # Check if any trading bot containers are already running
     local running_containers=$(docker ps --format "table {{.Names}}" | grep -E "(trading|bluefin|mcp|dashboard)" | tail -n +2 | wc -l)
     if [ "$running_containers" -gt 0 ]; then
@@ -199,24 +199,24 @@ verify_docker_environment() {
             exit 0
         fi
     fi
-    
+
     success "Docker environment verified"
 }
 
 # Check system resources
 check_system_resources() {
     log "Checking system resources..."
-    
+
     # Check available memory
     local available_mem=$(free -m | awk 'NR==2{printf "%.0f", $7}')
     local required_mem=2048  # 2GB minimum
-    
+
     if [ "$available_mem" -lt "$required_mem" ]; then
         warning "Low available memory: ${available_mem}MB (recommended: ${required_mem}MB+)"
     else
         log "✓ Available memory: ${available_mem}MB"
     fi
-    
+
     # Check disk space for encrypted volumes
     local volumes=("data" "logs" "config" "backup")
     for volume in "${volumes[@]}"; do
@@ -230,7 +230,7 @@ check_system_resources() {
             fi
         fi
     done
-    
+
     # Check CPU load
     local cpu_load=$(uptime | awk -F'load average:' '{print $2}' | awk '{print $1}' | sed 's/,//')
     local cpu_cores=$(nproc)
@@ -239,20 +239,20 @@ check_system_resources() {
     else
         log "✓ CPU load: $cpu_load (cores: $cpu_cores)"
     fi
-    
+
     success "System resources checked"
 }
 
 # Validate configuration
 validate_configuration() {
     log "Validating configuration..."
-    
+
     # Check if .env file exists
     if [ ! -f "$PROJECT_ROOT/.env" ]; then
         warning ".env file not found, using defaults"
     else
         log "✓ Configuration file found: .env"
-        
+
         # Check for encryption-related settings
         if grep -q "ENABLE_ENCRYPTION=true" "$PROJECT_ROOT/.env"; then
             log "✓ Encryption enabled in configuration"
@@ -260,7 +260,7 @@ validate_configuration() {
             warning "Encryption not explicitly enabled in .env"
         fi
     fi
-    
+
     # Check if encrypted compose file exists
     if [ ! -f "$PROJECT_ROOT/docker-compose.encrypted.yml" ]; then
         error "Encrypted Docker Compose configuration not found"
@@ -268,7 +268,7 @@ validate_configuration() {
     else
         log "✓ Encrypted Docker Compose configuration found"
     fi
-    
+
     # Validate compose file
     if ! docker-compose -f "$PROJECT_ROOT/docker-compose.encrypted.yml" config >/dev/null 2>&1; then
         error "Invalid Docker Compose configuration"
@@ -276,14 +276,14 @@ validate_configuration() {
     else
         log "✓ Docker Compose configuration valid"
     fi
-    
+
     success "Configuration validation completed"
 }
 
 # Create performance monitoring setup
 setup_monitoring() {
     log "Setting up performance monitoring..."
-    
+
     # Start crypto performance monitoring in background
     if $PRIVILEGED_MODE; then
         "$SCRIPT_DIR/monitor-crypto-performance.sh" continuous > /var/log/crypto-performance.log 2>&1 &
@@ -293,31 +293,31 @@ setup_monitoring() {
     else
         log "Skipping crypto monitoring setup (requires root privileges)"
     fi
-    
+
     success "Monitoring setup completed"
 }
 
 # Start encrypted services
 start_encrypted_services() {
     log "Starting encrypted trading bot services..."
-    
+
     cd "$PROJECT_ROOT"
-    
+
     # Set proper environment for Docker Compose
     export DOCKER_DEFAULT_PLATFORM=linux/amd64
-    
+
     # Start services with encrypted configuration
     log "Starting services with encrypted volumes..."
     docker-compose -f docker-compose.encrypted.yml up -d
-    
+
     # Wait for services to initialize
     log "Waiting for services to initialize..."
     sleep 30
-    
+
     # Check service health
     log "Checking service health..."
     local unhealthy_services=0
-    
+
     # Check each service
     local services=("ai-trading-bot-encrypted" "bluefin-service-encrypted" "mcp-memory-encrypted" "mcp-omnisearch-encrypted")
     for service in "${services[@]}"; do
@@ -328,7 +328,7 @@ start_encrypted_services() {
             ((unhealthy_services++))
         fi
     done
-    
+
     if [ $unhealthy_services -gt 0 ]; then
         warning "$unhealthy_services services may not be healthy"
         warning "Check logs: docker-compose -f docker-compose.encrypted.yml logs"
@@ -340,17 +340,17 @@ start_encrypted_services() {
 # Perform post-startup verification
 post_startup_verification() {
     log "Performing post-startup verification..."
-    
+
     # Check if all containers are running
     local expected_containers=4
     local running_containers=$(docker ps --format "table {{.Names}}" | grep -E "encrypted" | wc -l)
-    
+
     if [ "$running_containers" -ge "$expected_containers" ]; then
         log "✓ Expected number of containers running: $running_containers"
     else
         warning "Only $running_containers of $expected_containers expected containers running"
     fi
-    
+
     # Test encrypted volume access
     local test_file="/mnt/trading-data/startup_test_$(date +%s)"
     if echo "Startup test $(date)" > "$test_file" 2>/dev/null && [ -f "$test_file" ]; then
@@ -359,13 +359,13 @@ post_startup_verification() {
     else
         warning "Encrypted volume write test failed"
     fi
-    
+
     # Check if emergency stop flag was created (shouldn't be)
     if [ -f "$EMERGENCY_STOP_FILE" ]; then
         critical "Emergency stop flag was created during startup"
         return 1
     fi
-    
+
     success "Post-startup verification completed"
 }
 
@@ -446,7 +446,7 @@ main() {
     # Parse arguments
     local check_only=false
     local enable_monitoring=true
-    
+
     while [[ $# -gt 0 ]]; do
         case $1 in
             --check-only)
@@ -468,13 +468,13 @@ main() {
                 ;;
         esac
     done
-    
+
     # Create log file if it doesn't exist
     sudo touch "$LOG_FILE" 2>/dev/null || touch "$LOG_FILE"
-    
+
     print_banner
     log "Starting encrypted AI Trading Bot..."
-    
+
     # Perform all checks
     check_user
     check_emergency_stop
@@ -483,17 +483,17 @@ main() {
     verify_docker_environment
     check_system_resources
     validate_configuration
-    
+
     if $check_only; then
         success "All checks passed - system ready for startup"
         exit 0
     fi
-    
+
     # Setup and start services
     if $enable_monitoring; then
         setup_monitoring
     fi
-    
+
     start_encrypted_services
     post_startup_verification
     print_startup_summary

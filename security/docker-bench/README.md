@@ -253,7 +253,7 @@ The security gate integrates into your CI/CD pipeline with configurable enforcem
 ### Trading-Specific Alerts
 ```json
 {
-  "severity": "critical", 
+  "severity": "critical",
   "title": "Cryptocurrency Keys Exposed",
   "description": "Private keys found in environment variables",
   "container": "bluefin-service",

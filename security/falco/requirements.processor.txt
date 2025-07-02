@@ -1,45 +1,45 @@
 # Falco Security Event Processor Dependencies
 
-# Web framework
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-
-# HTTP client
-httpx==0.25.2
 aiohttp==3.9.1
-
-# Data processing
-pydantic==2.5.0
-pydantic-settings==2.1.0
-
-# Logging and monitoring
-structlog==23.2.0
-prometheus-client==0.19.0
-
-# Time handling
-pytz==2023.3
-python-dateutil==2.8.2
-
-# Configuration
-PyYAML==6.0.1
-python-dotenv==1.0.0
-
-# Slack/notification integrations
-slack-sdk==3.26.0
-
-# Email notifications
-smtplib
-email-validator==2.1.0
-
-# JSON processing
-orjson==3.9.10
+aiosqlite==0.19.0
 
 # Async support
 asyncio-throttle==1.0.2
 
 # Security
 cryptography==41.0.8
+email-validator==2.1.0
+# Web framework
+fastapi==0.104.1
+
+# HTTP client
+httpx==0.25.2
+
+# JSON processing
+orjson==3.9.10
+prometheus-client==0.19.0
+
+# Data processing
+pydantic==2.5.0
+pydantic-settings==2.1.0
+python-dateutil==2.8.2
+python-dotenv==1.0.0
+
+# Time handling
+pytz==2023.3
+
+# Configuration
+PyYAML==6.0.1
+
+# Slack/notification integrations
+slack-sdk==3.26.0
+
+# Email notifications
+smtplib
 
 # Database (optional for event storage)
 sqlalchemy==2.0.23
-aiosqlite==0.19.0
+
+# Logging and monitoring
+structlog==23.2.0
+uvicorn[standard]==0.24.0

@@ -19,18 +19,18 @@ vulnerability:
     - "secret"       # Secrets in code
     - "config"       # Configuration issues
     - "license"      # License compliance
-  
+
   # Severity levels to report
   severity:
     - "CRITICAL"
-    - "HIGH" 
+    - "HIGH"
     - "MEDIUM"
     - "LOW"
     - "UNKNOWN"
-  
+
   # Exit codes for CI/CD integration
   exit-code: 1  # Fail build on vulnerabilities
-  
+
   # Skip specific vulnerabilities if needed
   skip-update: false
   skip-files:
@@ -54,7 +54,7 @@ secret:
           - "CDP_API_KEY"
           - "api_key"
           - "private_key"
-      
+
       - id: "openai-api-key"
         category: "llm-services"
         title: "OpenAI API Key"
@@ -63,7 +63,7 @@ secret:
           - "OPENAI_API_KEY"
           - "LLM_OPENAI_API_KEY"
           - "sk-"
-      
+
       - id: "database-urls"
         category: "database"
         title: "Database Connection Strings"
@@ -72,7 +72,7 @@ secret:
           - "postgresql://"
           - "mysql://"
           - "mongodb://"
-      
+
       - id: "generic-passwords"
         category: "authentication"
         title: "Generic Passwords"
@@ -87,7 +87,7 @@ misconfig:
   # Include Dockerfile scanning
   include-non-failures: false
   trace: false
-  
+
   # Policy settings
   policy:
     - "appshield"    # Application security policies
@@ -104,7 +104,7 @@ license:
     - "BSD-3-Clause"
     - "BSD-2-Clause"
     - "ISC"
-  
+
   # Prohibited licenses
   prohibited:
     - "GPL-3.0"
@@ -144,15 +144,15 @@ custom:
     - name: "API Key Exposure"
       description: "Check for exposed trading API keys"
       severity: "CRITICAL"
-    
+
     - name: "Privileged Containers"
       description: "Trading containers should not run privileged"
       severity: "HIGH"
-    
+
     - name: "Network Policies"
       description: "Ensure proper network isolation"
       severity: "MEDIUM"
-    
+
     - name: "Resource Limits"
       description: "Containers should have resource limits"
       severity: "MEDIUM"
@@ -165,11 +165,11 @@ ignore:
     - "**/node_modules/**"
     - "**/venv/**"
     - "**/__pycache__/**"
-  
+
   # CVEs to ignore (with justification)
   cves:
     # Example: Ignore specific CVE if not applicable
     # - "CVE-2021-1234" # Not applicable to our use case
-  
+
   # Unfixed vulnerabilities to ignore
   unfixed: false  # Set to true to ignore unfixed vulns

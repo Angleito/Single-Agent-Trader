@@ -51,47 +51,47 @@ mkdir -p "$REPORTS_DIR" "$(dirname "$LOG_FILE")"
 # Run Docker Bench Security
 run_docker_bench() {
     info "Running Docker Bench Security scan..."
-    
+
     local timestamp=$(date '+%Y%m%d_%H%M%S')
     local report_file="${REPORTS_DIR}/docker-bench-${timestamp}.json"
     local log_file="${REPORTS_DIR}/docker-bench-${timestamp}.log"
-    
+
     if [ ! -f "${DOCKER_BENCH_DIR}/docker-bench-security.sh" ]; then
         error "Docker Bench Security not found. Run install-docker-bench.sh first."
         return 1
     fi
-    
+
     cd "$DOCKER_BENCH_DIR"
-    
+
     # Run Docker Bench with custom configuration
     ./docker-bench-security.sh \
         -l "$log_file" \
         -c "${TRADING_BOT_CONTAINERS:-ai-trading-bot,bluefin-service}" \
         > "$report_file" 2>&1
-    
+
     echo "$report_file"
 }
 
 # Run custom checks
 run_custom_checks() {
     info "Running custom trading bot security checks..."
-    
+
     local timestamp=$(date '+%Y%m%d_%H%M%S')
     local custom_report="${REPORTS_DIR}/custom-checks-${timestamp}.json"
-    
+
     echo '{"timestamp": "'$(date -Iseconds)'", "checks": [' > "$custom_report"
-    
+
     local first_check=true
     if [ -d "$CUSTOM_CHECKS_DIR" ]; then
         for check_script in "${CUSTOM_CHECKS_DIR}"/*.sh; do
             if [ -f "$check_script" ]; then
                 info "Running custom check: $(basename "$check_script")"
-                
+
                 if [ "$first_check" = false ]; then
                     echo "," >> "$custom_report"
                 fi
                 first_check=false
-                
+
                 # Simple check execution (would need proper check function integration)
                 echo '{"check": "'$(basename "$check_script")'", "status": "executed"}' >> "$custom_report"
             fi
@@ -99,9 +99,9 @@ run_custom_checks() {
     else
         warning "Custom checks directory not found: $CUSTOM_CHECKS_DIR"
     fi
-    
+
     echo ']}' >> "$custom_report"
-    
+
     echo "$custom_report"
 }
 
@@ -111,22 +111,22 @@ analyze_results() {
     local custom_report="$2"
     local timestamp=$(date '+%Y%m%d_%H%M%S')
     local analysis_report="${REPORTS_DIR}/security-analysis-${timestamp}.json"
-    
+
     info "Analyzing security scan results..."
-    
+
     # Count issues by severity (simplified parsing)
     local critical_count=0
     local high_count=0
     local medium_count=0
     local low_count=0
     local pass_count=0
-    
+
     # Parse Docker Bench results (simplified parsing)
     if [ -f "$docker_bench_report" ]; then
         critical_count=$(grep -c "WARN\|FAIL" "$docker_bench_report" 2>/dev/null || echo "0")
         pass_count=$(grep -c "PASS\|INFO" "$docker_bench_report" 2>/dev/null || echo "0")
     fi
-    
+
     # Create analysis report
     cat > "$analysis_report" << EOF
 {
@@ -163,28 +163,28 @@ EOF
 # Main execution
 main() {
     info "Starting comprehensive Docker security scan for AI Trading Bot"
-    
+
     # Ensure reports directory exists
     mkdir -p "$REPORTS_DIR"
-    
+
     # Run Docker Bench Security
     local docker_bench_report
     docker_bench_report=$(run_docker_bench)
-    
+
     # Run custom checks
     local custom_report
     custom_report=$(run_custom_checks)
-    
+
     # Analyze results
     local analysis_report
     analysis_report=$(analyze_results "$docker_bench_report" "$custom_report")
-    
+
     success "Security scan completed successfully"
     info "Reports generated:"
     info "  - Docker Bench: $docker_bench_report"
     info "  - Custom Checks: $custom_report"
     info "  - Analysis: $analysis_report"
-    
+
     # Display summary
     if command -v jq &> /dev/null && [ -f "$analysis_report" ]; then
         echo

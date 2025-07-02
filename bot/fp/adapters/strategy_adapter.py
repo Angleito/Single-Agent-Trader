@@ -180,17 +180,19 @@ class FunctionalLLMStrategy:
             omnisearch_data = None
             if self.omnisearch_client:
                 omnisearch_data = await self._fetch_omnisearch_data(market_state)
-            
+
             # Create market context for LLM using the functional approach
             context = create_market_context(
                 market_state=market_state,
                 vumanchu_state=self._extract_vumanchu_state(market_state),
                 recent_trades=[],  # Would be populated from trade history
             )
-            
+
             # Add omnisearch data to context if available
             if omnisearch_data:
-                context = self._enhance_context_with_omnisearch(context, omnisearch_data)
+                context = self._enhance_context_with_omnisearch(
+                    context, omnisearch_data
+                )
 
             # Generate trading prompt
             params = TypeConverter.create_trading_params()
@@ -242,36 +244,35 @@ class FunctionalLLMStrategy:
         """Extract VuManChu state from market state indicators."""
         # This would extract the VuManChu state from the indicators
         # For now, return None to work with the create_market_context function
-        return None
+        return
 
     async def _call_llm(self, prompt: str) -> str:
         """Call the LLM with the given prompt."""
         try:
             # Import OpenAI client
             from openai import AsyncOpenAI
-            
+
             # Initialize OpenAI client with API key from config
             client = AsyncOpenAI(
                 api_key=self.config.api_key,
                 timeout=30.0,
                 max_retries=2,
             )
-            
+
             # Prepare messages for chat completion
             messages = [
                 {
                     "role": "system",
-                    "content": "You are an expert cryptocurrency futures trader. Respond only in valid JSON format."
+                    "content": "You are an expert cryptocurrency futures trader. Respond only in valid JSON format.",
                 },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
+                {"role": "user", "content": prompt},
             ]
-            
+
             # Call OpenAI API
-            logger.debug(f"Calling {self.config.provider}/{self.config.model} with prompt length: {len(prompt)}")
-            
+            logger.debug(
+                f"Calling {self.config.provider}/{self.config.model} with prompt length: {len(prompt)}"
+            )
+
             response = await client.chat.completions.create(
                 model=self.config.model,
                 messages=messages,
@@ -279,18 +280,20 @@ class FunctionalLLMStrategy:
                 max_tokens=self.config.max_tokens,
                 response_format={"type": "text"},  # We parse JSON from text response
             )
-            
+
             # Extract the response content
             llm_response = response.choices[0].message.content
-            
-            logger.debug(f"LLM response received, length: {len(llm_response) if llm_response else 0}")
+
+            logger.debug(
+                f"LLM response received, length: {len(llm_response) if llm_response else 0}"
+            )
             return llm_response or self._get_fallback_response()
-            
+
         except Exception as e:
             logger.error(f"Error calling LLM: {e}", exc_info=True)
             # Return a safe fallback response on error
             return self._get_fallback_response()
-    
+
     def _get_fallback_response(self) -> str:
         """Get a safe fallback response when LLM call fails."""
         return """
@@ -315,58 +318,74 @@ class FunctionalLLMStrategy:
             }
         }
         """
-    
-    async def _fetch_omnisearch_data(self, market_state: MarketState) -> dict[str, Any] | None:
+
+    async def _fetch_omnisearch_data(
+        self, market_state: MarketState
+    ) -> dict[str, Any] | None:
         """Fetch relevant data from omnisearch for market analysis."""
         try:
             symbol = market_state.symbol
-            base_symbol = symbol.split("-")[0]  # Extract base symbol (e.g., BTC from BTC-USD)
-            
+            base_symbol = symbol.split("-")[
+                0
+            ]  # Extract base symbol (e.g., BTC from BTC-USD)
+
             # Fetch multiple data points concurrently
             tasks = []
-            
+
             # Crypto sentiment
             tasks.append(self.omnisearch_client.search_crypto_sentiment(symbol))
-            
+
             # Financial news
-            tasks.append(self.omnisearch_client.search_financial_news(
-                f"{base_symbol} cryptocurrency news",
-                limit=5,
-                timeframe="24h"
-            ))
-            
+            tasks.append(
+                self.omnisearch_client.search_financial_news(
+                    f"{base_symbol} cryptocurrency news", limit=5, timeframe="24h"
+                )
+            )
+
             # NASDAQ sentiment (for correlation)
             tasks.append(self.omnisearch_client.search_nasdaq_sentiment())
-            
+
             # Market correlation
-            tasks.append(self.omnisearch_client.search_market_correlation(
-                base_symbol, "QQQ", "30d"
-            ))
-            
+            tasks.append(
+                self.omnisearch_client.search_market_correlation(
+                    base_symbol, "QQQ", "30d"
+                )
+            )
+
             # Execute all tasks concurrently
             results = await asyncio.gather(*tasks, return_exceptions=True)
-            
+
             # Process results
             omnisearch_data = {
-                "crypto_sentiment": results[0] if not isinstance(results[0], Exception) else None,
-                "financial_news": results[1] if not isinstance(results[1], Exception) else [],
-                "nasdaq_sentiment": results[2] if not isinstance(results[2], Exception) else None,
-                "market_correlation": results[3] if not isinstance(results[3], Exception) else None,
+                "crypto_sentiment": (
+                    results[0] if not isinstance(results[0], Exception) else None
+                ),
+                "financial_news": (
+                    results[1] if not isinstance(results[1], Exception) else []
+                ),
+                "nasdaq_sentiment": (
+                    results[2] if not isinstance(results[2], Exception) else None
+                ),
+                "market_correlation": (
+                    results[3] if not isinstance(results[3], Exception) else None
+                ),
             }
-            
+
             logger.info(
                 f"OmniSearch data fetched - Sentiment: {omnisearch_data['crypto_sentiment'].overall_sentiment if omnisearch_data['crypto_sentiment'] else 'N/A'}, "
                 f"News items: {len(omnisearch_data['financial_news'])}, "
                 f"Correlation: {omnisearch_data['market_correlation'].correlation_coefficient if omnisearch_data['market_correlation'] else 'N/A'}"
             )
-            
+
             return omnisearch_data
-            
+
         except Exception as e:
             logger.warning(f"Failed to fetch omnisearch data: {e}")
             return None
-    
-    def _enhance_context_with_omnisearch(self, context: LLMContext, omnisearch_data: dict[str, Any]) -> LLMContext:
+
+    def _enhance_context_with_omnisearch(
+        self, context: LLMContext, omnisearch_data: dict[str, Any]
+    ) -> LLMContext:
         """Enhance the LLM context with omnisearch data."""
         # Create a new context with additional omnisearch data
         enhanced_context = LLMContext(
@@ -376,26 +395,48 @@ class FunctionalLLMStrategy:
             market_sentiment=self._extract_market_sentiment(omnisearch_data),
             news_events=self._extract_news_events(omnisearch_data),
         )
-        
+
         # Add omnisearch-specific indicators
         enhanced_context.indicators["omnisearch"] = {
-            "crypto_sentiment_score": omnisearch_data["crypto_sentiment"].sentiment_score if omnisearch_data.get("crypto_sentiment") else 0.0,
-            "crypto_sentiment_label": omnisearch_data["crypto_sentiment"].overall_sentiment if omnisearch_data.get("crypto_sentiment") else "neutral",
-            "nasdaq_sentiment_score": omnisearch_data["nasdaq_sentiment"].sentiment_score if omnisearch_data.get("nasdaq_sentiment") else 0.0,
-            "market_correlation": omnisearch_data["market_correlation"].correlation_coefficient if omnisearch_data.get("market_correlation") else 0.0,
-            "correlation_strength": omnisearch_data["market_correlation"].strength if omnisearch_data.get("market_correlation") else "weak",
+            "crypto_sentiment_score": (
+                omnisearch_data["crypto_sentiment"].sentiment_score
+                if omnisearch_data.get("crypto_sentiment")
+                else 0.0
+            ),
+            "crypto_sentiment_label": (
+                omnisearch_data["crypto_sentiment"].overall_sentiment
+                if omnisearch_data.get("crypto_sentiment")
+                else "neutral"
+            ),
+            "nasdaq_sentiment_score": (
+                omnisearch_data["nasdaq_sentiment"].sentiment_score
+                if omnisearch_data.get("nasdaq_sentiment")
+                else 0.0
+            ),
+            "market_correlation": (
+                omnisearch_data["market_correlation"].correlation_coefficient
+                if omnisearch_data.get("market_correlation")
+                else 0.0
+            ),
+            "correlation_strength": (
+                omnisearch_data["market_correlation"].strength
+                if omnisearch_data.get("market_correlation")
+                else "weak"
+            ),
         }
-        
+
         return enhanced_context
-    
-    def _extract_market_sentiment(self, omnisearch_data: dict[str, Any]) -> dict[str, Any]:
+
+    def _extract_market_sentiment(
+        self, omnisearch_data: dict[str, Any]
+    ) -> dict[str, Any]:
         """Extract market sentiment from omnisearch data."""
         sentiment = {
             "overall": "neutral",
             "confidence": 0.5,
             "sources": [],
         }
-        
+
         if omnisearch_data.get("crypto_sentiment"):
             crypto_sent = omnisearch_data["crypto_sentiment"]
             sentiment["overall"] = crypto_sent.overall_sentiment
@@ -403,13 +444,15 @@ class FunctionalLLMStrategy:
             sentiment["score"] = crypto_sent.sentiment_score
             sentiment["key_drivers"] = crypto_sent.key_drivers
             sentiment["risk_factors"] = crypto_sent.risk_factors
-            
+
         return sentiment
-    
-    def _extract_news_events(self, omnisearch_data: dict[str, Any]) -> list[dict[str, Any]]:
+
+    def _extract_news_events(
+        self, omnisearch_data: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """Extract relevant news events from omnisearch data."""
         news_events = []
-        
+
         if omnisearch_data.get("financial_news"):
             for news_item in omnisearch_data["financial_news"][:3]:  # Top 3 news items
                 event = {
@@ -421,7 +464,7 @@ class FunctionalLLMStrategy:
                     "snippet": news_item.base_result.snippet,
                 }
                 news_events.append(event)
-                
+
         return news_events
 
 

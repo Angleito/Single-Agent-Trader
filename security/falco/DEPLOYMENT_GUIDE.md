@@ -56,7 +56,7 @@ This guide provides step-by-step instructions for deploying Falco runtime securi
    # Verify Docker installation
    docker --version
    docker-compose --version
-   
+
    # Verify Docker permissions
    docker info
    ```
@@ -65,7 +65,7 @@ This guide provides step-by-step instructions for deploying Falco runtime securi
    ```bash
    # Check kernel version (4.14+ required for eBPF)
    uname -r
-   
+
    # Check eBPF support
    ls /sys/kernel/debug/tracing/events/syscalls/
    ```
@@ -74,7 +74,7 @@ This guide provides step-by-step instructions for deploying Falco runtime securi
    ```bash
    # Verify trading bot is running
    docker ps | grep -E "(ai-trading-bot|bluefin-service)"
-   
+
    # Verify network exists
    docker network ls | grep trading-network
    ```
@@ -146,7 +146,7 @@ python3 -c "
 import yaml
 files = [
     'security/falco/falco.yaml',
-    'security/falco/trading_bot_rules.yaml', 
+    'security/falco/trading_bot_rules.yaml',
     'security/falco/financial_security_rules.yaml',
     'security/falco/container_security_rules.yaml'
 ]
@@ -240,7 +240,7 @@ echo "=== Service Health Check ==="
 # Falco
 curl -f http://localhost:8765/healthz && echo "✅ Falco OK" || echo "❌ Falco Failed"
 
-# AlertManager  
+# AlertManager
 curl -f http://localhost:9093/-/healthy && echo "✅ AlertManager OK" || echo "❌ AlertManager Failed"
 
 # Security Processor
@@ -416,7 +416,7 @@ case "$1" in
         echo "Stopping trading operations..."
         curl -X POST http://localhost:8000/api/emergency/stop
         ;;
-    "isolate-containers") 
+    "isolate-containers")
         echo "Isolating trading containers..."
         docker network disconnect trading-network ai-trading-bot
         docker network disconnect trading-network bluefin-service
@@ -455,7 +455,7 @@ cat > docs/SECURITY_OPERATIONS.md << 'EOF'
 - [ ] Verify all services are healthy
 - [ ] Check resource usage trends
 
-## Weekly Operations  
+## Weekly Operations
 - [ ] Review security metrics and trends
 - [ ] Update threat intelligence rules
 - [ ] Performance optimization review
@@ -547,7 +547,7 @@ curl -s http://localhost:8765/stats | jq '.syscall_event_drops'
 
 - [ ] **Access Control**: Security services bound to localhost only
 - [ ] **Credentials**: Sensitive credentials stored securely
-- [ ] **Encryption**: TLS enabled for external communications  
+- [ ] **Encryption**: TLS enabled for external communications
 - [ ] **Logging**: Security events logged and rotated
 - [ ] **Monitoring**: Health checks and alerting configured
 - [ ] **Updates**: Regular security updates scheduled
@@ -558,18 +558,18 @@ curl -s http://localhost:8765/stats | jq '.syscall_event_drops'
 
 **Deployment is successful when:**
 
-✅ All security services are running and healthy  
-✅ Security events are being detected and processed  
-✅ Alerts are being delivered to configured channels  
-✅ Dashboard integration is functional  
-✅ Performance impact is within acceptable limits  
-✅ Emergency procedures are tested and documented  
-✅ Monitoring and maintenance procedures are in place  
+✅ All security services are running and healthy
+✅ Security events are being detected and processed
+✅ Alerts are being delivered to configured channels
+✅ Dashboard integration is functional
+✅ Performance impact is within acceptable limits
+✅ Emergency procedures are tested and documented
+✅ Monitoring and maintenance procedures are in place
 
 ### Post-Deployment Tasks
 
 1. **Monitor for 24 hours** - Ensure stability
-2. **Fine-tune rules** - Adjust for false positives  
+2. **Fine-tune rules** - Adjust for false positives
 3. **Test incident response** - Verify procedures work
 4. **Document lessons learned** - Update procedures
 5. **Schedule regular reviews** - Continuous improvement

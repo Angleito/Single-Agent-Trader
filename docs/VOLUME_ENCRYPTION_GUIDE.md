@@ -697,7 +697,7 @@ For production deployments requiring high availability:
    ```bash
    # Set up RAID 1 for redundancy
    sudo mdadm --create /dev/md0 --level=1 --raid-devices=2 /dev/sdb /dev/sdc
-   
+
    # Create LUKS on RAID
    sudo cryptsetup luksFormat /dev/md0 /opt/trading-bot/keys/raid.key
    ```

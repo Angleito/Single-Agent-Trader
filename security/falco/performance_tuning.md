@@ -74,7 +74,7 @@ base_syscalls:
     - fstat
     - unlink
     - rename
-    
+
     # Network operations (API calls)
     - socket
     - connect
@@ -85,7 +85,7 @@ base_syscalls:
     - recvfrom
     - sendmsg
     - recvmsg
-    
+
     # Process operations (security monitoring)
     - execve
     - clone
@@ -93,12 +93,12 @@ base_syscalls:
     - vfork
     - exit
     - exit_group
-    
+
     # Memory operations (minimal set)
     - mmap
     - munmap
     - mprotect
-    
+
     # Essential container operations
     - chroot
     - mount
@@ -125,7 +125,7 @@ rules_file:
 # Example of optimized rule condition
 - rule: Trading Credentials Access Optimized
   condition: >
-    open_read and 
+    open_read and
     fd.name contains "/run/secrets/" and
     not proc.name in (python, python3) and
     container.name in (ai-trading-bot, bluefin-service)

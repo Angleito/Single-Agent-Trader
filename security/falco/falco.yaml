@@ -194,13 +194,13 @@ program_output:
 tune:
   # Syscall buffer size (trading bots generate many syscalls)
   syscall_buf_size: 8388608  # 8MB
-  
+
   # Increase event drops threshold for high-frequency trading
   syscall_drops_threshold: 0.1
-  
+
   # Trading bot specific timeouts
   syscall_drops_timeout: 30
-  
+
   # Network tuning for API calls
   syscall_drops_rate: 1
   syscall_drops_max_burst: 1000
@@ -213,7 +213,7 @@ tune:
 container_runtime:
   docker:
     socket_path: /var/run/docker.sock
-  
+
 # Kubernetes integration (if using k8s in future)
 k8s_audit:
   enabled: false
@@ -267,7 +267,7 @@ engine:
 grpc:
   enabled: true
   bind_address: "0.0.0.0:5060"
-  
+
 grpc_output:
   enabled: true
 
@@ -279,7 +279,7 @@ webserver:
   enabled: true
   listen_port: 8765
   k8s_healthz_endpoint: /healthz
-  
+
 # ------------------------------------------------------------------------------
 # Priority Configuration for Trading Bot
 # ------------------------------------------------------------------------------
@@ -287,22 +287,22 @@ webserver:
 priority:
   # Critical: Immediate threat to trading operations
   critical: "Critical"
-  
+
   # Emergency: Container escape, privilege escalation
   emergency: "Emergency"
-  
+
   # Alert: Suspicious activity, policy violation
   alert: "Alert"
-  
+
   # Warning: Unusual but not necessarily malicious
   warning: "Warning"
-  
+
   # Notice: Informational events
   notice: "Notice"
-  
+
   # Informational: Debug information
   informational: "Informational"
-  
+
   # Debug: Detailed debugging information
   debug: "Debug"
 
@@ -316,7 +316,7 @@ minimum_priority: warning
 # Enable advanced syscall monitoring
 advanced_syscall_monitoring:
   enabled: true
-  
+
 # File integrity monitoring
 file_integrity:
   enabled: true
@@ -337,7 +337,7 @@ network_monitoring:
     - 3389  # RDP
     - 4444  # Common backdoor
     - 1337  # Common backdoor
-  
+
   allowed_outbound_ports:
     - 80    # HTTP
     - 443   # HTTPS
@@ -361,7 +361,7 @@ process_monitoring:
     - ruby -e
     - node -e
     - php -r
-  
+
   allowed_processes:
     - python
     - python3
@@ -378,7 +378,7 @@ memory_monitoring:
   thresholds:
     warning: 75    # 75% memory usage warning
     critical: 90   # 90% memory usage critical
-    
+
 # Trading-specific monitoring
 trading_monitoring:
   enabled: true
@@ -389,7 +389,7 @@ trading_monitoring:
     - api.bluefin.trade
     - openai.com
     - api.openai.com
-  
+
   critical_files:
     - /app/data/paper_trading/account.json
     - /app/data/positions/positions.json
@@ -410,9 +410,9 @@ rate_limiting:
 suppression:
   - rule: "Read sensitive file trusted after startup"
     condition: "and proc.name in (python, python3)"
-  
+
   - rule: "Write below etc"
     condition: "and container.name startswith ai-trading-bot"
-    
+
   - rule: "DB program spawned process"
     condition: "and proc.pname in (python, python3)"

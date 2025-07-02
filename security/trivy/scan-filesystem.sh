@@ -61,22 +61,22 @@ log_report() {
 # Function to setup directories
 setup_directories() {
     log_info "Setting up report directories..."
-    
+
     mkdir -p "$REPORTS_DIR"/{filesystem,secrets,configs,licenses,dependencies,json,html,sarif}
     mkdir -p "$REPORTS_DIR/archive/$TIMESTAMP"
-    
+
     log_success "Report directories created"
 }
 
 # Function to scan filesystem for vulnerabilities
 scan_filesystem_vulnerabilities() {
     log_scan "Scanning filesystem for vulnerabilities..."
-    
+
     local base_report="$REPORTS_DIR/filesystem/filesystem_vulns_${TIMESTAMP}"
     local json_report="$REPORTS_DIR/json/filesystem_vulns_${TIMESTAMP}.json"
     local html_report="$REPORTS_DIR/html/filesystem_vulns_${TIMESTAMP}.html"
     local sarif_report="$REPORTS_DIR/sarif/filesystem_vulns_${TIMESTAMP}.sarif"
-    
+
     # Basic filesystem scan
     log_info "Running filesystem vulnerability scan..."
     trivy fs \
@@ -86,7 +86,7 @@ scan_filesystem_vulnerabilities() {
         --output "${base_report}.txt" \
         --skip-dirs "$EXCLUDE_DIRS" \
         "$PROJECT_ROOT" || true
-    
+
     # JSON format for processing
     log_info "Generating JSON report for filesystem..."
     trivy fs \
@@ -96,7 +96,7 @@ scan_filesystem_vulnerabilities() {
         --output "$json_report" \
         --skip-dirs "$EXCLUDE_DIRS" \
         "$PROJECT_ROOT" || true
-    
+
     # HTML format for viewing
     log_info "Generating HTML report for filesystem..."
     trivy fs \
@@ -107,7 +107,7 @@ scan_filesystem_vulnerabilities() {
         --output "$html_report" \
         --skip-dirs "$EXCLUDE_DIRS" \
         "$PROJECT_ROOT" || true
-    
+
     # SARIF format for CI/CD integration
     log_info "Generating SARIF report for filesystem..."
     trivy fs \
@@ -117,7 +117,7 @@ scan_filesystem_vulnerabilities() {
         --output "$sarif_report" \
         --skip-dirs "$EXCLUDE_DIRS" \
         "$PROJECT_ROOT" || true
-    
+
     log_success "Filesystem vulnerability scan completed"
 }
 
@@ -126,12 +126,12 @@ scan_secrets() {
     if [[ "$SCAN_SECRETS" != true ]]; then
         return
     fi
-    
+
     log_scan "Scanning for secrets in source code..."
-    
+
     local base_report="$REPORTS_DIR/secrets/secrets_${TIMESTAMP}"
     local json_report="$REPORTS_DIR/json/secrets_${TIMESTAMP}.json"
-    
+
     # Scan for secrets
     log_info "Running secret scan..."
     trivy fs \
@@ -140,7 +140,7 @@ scan_secrets() {
         --output "${base_report}.txt" \
         --skip-dirs "$EXCLUDE_DIRS" \
         "$PROJECT_ROOT" || true
-    
+
     # JSON format for processing
     trivy fs \
         --scanners secret \
@@ -148,10 +148,10 @@ scan_secrets() {
         --output "$json_report" \
         --skip-dirs "$EXCLUDE_DIRS" \
         "$PROJECT_ROOT" || true
-    
+
     # Scan specific high-risk files
     log_info "Scanning high-risk files for secrets..."
-    
+
     # Environment files
     find "$PROJECT_ROOT" -name "*.env*" -not -path "*/.git/*" -not -path "*/node_modules/*" | while read -r env_file; do
         if [[ -f "$env_file" ]]; then
@@ -163,7 +163,7 @@ scan_secrets() {
                 "$env_file" || true
         fi
     done
-    
+
     # Configuration files
     find "$PROJECT_ROOT" -name "*.json" -o -name "*.yaml" -o -name "*.yml" -o -name "*.toml" \
         | grep -v -E "(node_modules|\.git|__pycache__|\.pytest_cache)" \
@@ -177,7 +177,7 @@ scan_secrets() {
                 "$config_file" || true
         fi
     done
-    
+
     # Docker files
     find "$PROJECT_ROOT" -name "Dockerfile*" -o -name "docker-compose*.yml" | while read -r docker_file; do
         if [[ -f "$docker_file" ]]; then
@@ -189,7 +189,7 @@ scan_secrets() {
                 "$docker_file" || true
         fi
     done
-    
+
     log_success "Secret scan completed"
 }
 
@@ -198,12 +198,12 @@ scan_configurations() {
     if [[ "$SCAN_CONFIGS" != true ]]; then
         return
     fi
-    
+
     log_scan "Scanning configuration files for misconfigurations..."
-    
+
     local base_report="$REPORTS_DIR/configs/configs_${TIMESTAMP}"
     local json_report="$REPORTS_DIR/json/configs_${TIMESTAMP}.json"
-    
+
     # Scan for misconfigurations
     log_info "Running configuration scan..."
     trivy fs \
@@ -212,7 +212,7 @@ scan_configurations() {
         --output "${base_report}.txt" \
         --skip-dirs "$EXCLUDE_DIRS" \
         "$PROJECT_ROOT" || true
-    
+
     # JSON format for processing
     trivy fs \
         --scanners config \
@@ -220,10 +220,10 @@ scan_configurations() {
         --output "$json_report" \
         --skip-dirs "$EXCLUDE_DIRS" \
         "$PROJECT_ROOT" || true
-    
+
     # Specific configuration scans
     log_info "Scanning Docker configurations..."
-    
+
     # Docker-compose files
     find "$PROJECT_ROOT" -name "docker-compose*.yml" | while read -r compose_file; do
         if [[ -f "$compose_file" ]]; then
@@ -234,7 +234,7 @@ scan_configurations() {
                 "$compose_file" || true
         fi
     done
-    
+
     # Dockerfiles
     find "$PROJECT_ROOT" -name "Dockerfile*" | while read -r dockerfile; do
         if [[ -f "$dockerfile" ]]; then
@@ -245,7 +245,7 @@ scan_configurations() {
                 "$dockerfile" || true
         fi
     done
-    
+
     # Kubernetes manifests (if any)
     find "$PROJECT_ROOT" -name "*.yaml" -o -name "*.yml" | grep -E "(k8s|kubernetes|manifest)" | while read -r k8s_file; do
         if [[ -f "$k8s_file" ]]; then
@@ -256,7 +256,7 @@ scan_configurations() {
                 "$k8s_file" || true
         fi
     done
-    
+
     # Security configurations
     find "$PROJECT_ROOT/security" -name "*.yaml" -o -name "*.yml" 2>/dev/null | while read -r security_file; do
         if [[ -f "$security_file" ]]; then
@@ -267,7 +267,7 @@ scan_configurations() {
                 "$security_file" || true
         fi
     done
-    
+
     log_success "Configuration scan completed"
 }
 
@@ -276,12 +276,12 @@ scan_licenses() {
     if [[ "$SCAN_LICENSES" != true ]]; then
         return
     fi
-    
+
     log_scan "Scanning for license compliance..."
-    
+
     local base_report="$REPORTS_DIR/licenses/licenses_${TIMESTAMP}"
     local json_report="$REPORTS_DIR/json/licenses_${TIMESTAMP}.json"
-    
+
     # Scan for licenses
     log_info "Running license scan..."
     trivy fs \
@@ -290,7 +290,7 @@ scan_licenses() {
         --output "${base_report}.txt" \
         --skip-dirs "$EXCLUDE_DIRS" \
         "$PROJECT_ROOT" || true
-    
+
     # JSON format for processing
     trivy fs \
         --scanners license \
@@ -298,10 +298,10 @@ scan_licenses() {
         --output "$json_report" \
         --skip-dirs "$EXCLUDE_DIRS" \
         "$PROJECT_ROOT" || true
-    
+
     # Scan specific dependency files
     log_info "Scanning dependency files for licenses..."
-    
+
     # Python dependencies
     if [[ -f "$PROJECT_ROOT/pyproject.toml" ]]; then
         log_info "Scanning Python dependencies (pyproject.toml)..."
@@ -311,7 +311,7 @@ scan_licenses() {
             --output "${base_report}_python.txt" \
             "$PROJECT_ROOT/pyproject.toml" || true
     fi
-    
+
     if [[ -f "$PROJECT_ROOT/requirements.txt" ]]; then
         log_info "Scanning Python dependencies (requirements.txt)..."
         trivy fs \
@@ -320,7 +320,7 @@ scan_licenses() {
             --output "${base_report}_requirements.txt" \
             "$PROJECT_ROOT/requirements.txt" || true
     fi
-    
+
     # Node.js dependencies
     if [[ -f "$PROJECT_ROOT/package.json" ]]; then
         log_info "Scanning Node.js dependencies..."
@@ -330,7 +330,7 @@ scan_licenses() {
             --output "${base_report}_nodejs.txt" \
             "$PROJECT_ROOT/package.json" || true
     fi
-    
+
     # Dashboard dependencies
     if [[ -f "$PROJECT_ROOT/dashboard/frontend/package.json" ]]; then
         log_info "Scanning dashboard frontend dependencies..."
@@ -340,7 +340,7 @@ scan_licenses() {
             --output "${base_report}_dashboard_frontend.txt" \
             "$PROJECT_ROOT/dashboard/frontend/package.json" || true
     fi
-    
+
     if [[ -f "$PROJECT_ROOT/dashboard/backend/requirements.txt" ]]; then
         log_info "Scanning dashboard backend dependencies..."
         trivy fs \
@@ -349,7 +349,7 @@ scan_licenses() {
             --output "${base_report}_dashboard_backend.txt" \
             "$PROJECT_ROOT/dashboard/backend/requirements.txt" || true
     fi
-    
+
     log_success "License scan completed"
 }
 
@@ -358,12 +358,12 @@ scan_dependencies() {
     if [[ "$SCAN_DEPENDENCIES" != true ]]; then
         return
     fi
-    
+
     log_scan "Scanning dependencies for vulnerabilities..."
-    
+
     local base_report="$REPORTS_DIR/dependencies/deps_${TIMESTAMP}"
     local json_report="$REPORTS_DIR/json/deps_${TIMESTAMP}.json"
-    
+
     # Python dependencies
     if [[ -f "$PROJECT_ROOT/pyproject.toml" ]]; then
         log_info "Scanning Python dependencies (pyproject.toml)..."
@@ -373,7 +373,7 @@ scan_dependencies() {
             --severity "$SEVERITY" \
             --output "${base_report}_python.txt" \
             "$PROJECT_ROOT/pyproject.toml" || true
-        
+
         trivy fs \
             --config "$CONFIG_FILE" \
             --format json \
@@ -381,7 +381,7 @@ scan_dependencies() {
             --output "${json_report/deps_/deps_python_}" \
             "$PROJECT_ROOT/pyproject.toml" || true
     fi
-    
+
     # Node.js dependencies
     if [[ -f "$PROJECT_ROOT/package.json" ]]; then
         log_info "Scanning Node.js dependencies..."
@@ -392,7 +392,7 @@ scan_dependencies() {
             --output "${base_report}_nodejs.txt" \
             "$PROJECT_ROOT/package.json" || true
     fi
-    
+
     # Dashboard dependencies
     if [[ -f "$PROJECT_ROOT/dashboard/frontend/package.json" ]]; then
         log_info "Scanning dashboard frontend dependencies..."
@@ -403,7 +403,7 @@ scan_dependencies() {
             --output "${base_report}_dashboard_frontend.txt" \
             "$PROJECT_ROOT/dashboard/frontend" || true
     fi
-    
+
     if [[ -f "$PROJECT_ROOT/dashboard/backend/requirements.txt" ]]; then
         log_info "Scanning dashboard backend dependencies..."
         trivy fs \
@@ -413,16 +413,16 @@ scan_dependencies() {
             --output "${base_report}_dashboard_backend.txt" \
             "$PROJECT_ROOT/dashboard/backend" || true
     fi
-    
+
     log_success "Dependency scan completed"
 }
 
 # Function to generate summary report
 generate_summary() {
     log_info "Generating filesystem scan summary report..."
-    
+
     local summary_file="$REPORTS_DIR/filesystem_summary_${TIMESTAMP}.md"
-    
+
     cat > "$summary_file" <<EOF
 # Filesystem and Configuration Vulnerability Scan Summary
 
@@ -433,13 +433,13 @@ generate_summary() {
 ## Scan Results
 
 EOF
-    
+
     # Count findings by type
     local total_vulns=0
     local total_secrets=0
     local total_configs=0
     local total_licenses=0
-    
+
     # Vulnerability counts
     if [[ -f "$REPORTS_DIR/json/filesystem_vulns_${TIMESTAMP}.json" ]]; then
         echo "### Vulnerabilities" >> "$summary_file"
@@ -448,24 +448,24 @@ EOF
             local high=$(jq -r '.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH") | .VulnerabilityID' "$REPORTS_DIR/json/filesystem_vulns_${TIMESTAMP}.json" 2>/dev/null | wc -l)
             local medium=$(jq -r '.Results[]?.Vulnerabilities[]? | select(.Severity=="MEDIUM") | .VulnerabilityID' "$REPORTS_DIR/json/filesystem_vulns_${TIMESTAMP}.json" 2>/dev/null | wc -l)
             local low=$(jq -r '.Results[]?.Vulnerabilities[]? | select(.Severity=="LOW") | .VulnerabilityID' "$REPORTS_DIR/json/filesystem_vulns_${TIMESTAMP}.json" 2>/dev/null | wc -l)
-            
+
             echo "- **Critical**: $critical" >> "$summary_file"
             echo "- **High**: $high" >> "$summary_file"
             echo "- **Medium**: $medium" >> "$summary_file"
             echo "- **Low**: $low" >> "$summary_file"
-            
+
             total_vulns=$((critical + high + medium + low))
         fi
         echo "" >> "$summary_file"
     fi
-    
+
     # Secret counts
     if [[ -f "$REPORTS_DIR/json/secrets_${TIMESTAMP}.json" ]]; then
         echo "### Secrets Found" >> "$summary_file"
         if command -v jq >/dev/null 2>&1; then
             total_secrets=$(jq -r '.Results[]?.Secrets[]? | .RuleID' "$REPORTS_DIR/json/secrets_${TIMESTAMP}.json" 2>/dev/null | wc -l)
             echo "- **Total Secrets**: $total_secrets" >> "$summary_file"
-            
+
             # List secret types
             jq -r '.Results[]?.Secrets[]? | .Category' "$REPORTS_DIR/json/secrets_${TIMESTAMP}.json" 2>/dev/null | sort | uniq -c | while read -r count category; do
                 echo "  - $category: $count" >> "$summary_file"
@@ -473,7 +473,7 @@ EOF
         fi
         echo "" >> "$summary_file"
     fi
-    
+
     # Configuration issues
     if [[ -f "$REPORTS_DIR/json/configs_${TIMESTAMP}.json" ]]; then
         echo "### Configuration Issues" >> "$summary_file"
@@ -483,7 +483,7 @@ EOF
         fi
         echo "" >> "$summary_file"
     fi
-    
+
     # License issues
     if [[ -f "$REPORTS_DIR/json/licenses_${TIMESTAMP}.json" ]]; then
         echo "### License Issues" >> "$summary_file"
@@ -493,7 +493,7 @@ EOF
         fi
         echo "" >> "$summary_file"
     fi
-    
+
     # Add recommendations
     cat >> "$summary_file" <<EOF
 
@@ -539,9 +539,9 @@ EOF
 4. Regular security training for development team
 
 EOF
-    
+
     log_success "Summary report generated: $summary_file"
-    
+
     # Display summary
     if [[ "$OUTPUT_FORMAT" == "table" ]]; then
         echo ""
@@ -551,18 +551,18 @@ EOF
         echo "Total Config Issues: $total_configs"
         echo "Total Licenses: $total_licenses"
         echo ""
-        
+
         if [[ $total_secrets -gt 0 ]]; then
             log_error "Secrets found in codebase! Review immediately."
             if [[ "$EXIT_ON_VULN" == true ]]; then
                 exit 1
             fi
         fi
-        
+
         if [[ $total_vulns -gt 0 ]]; then
             log_warning "Vulnerabilities found in dependencies."
         fi
-        
+
         if [[ $total_secrets -eq 0 && $total_vulns -eq 0 ]]; then
             log_success "No critical security issues found"
         fi
@@ -573,9 +573,9 @@ EOF
 send_notification() {
     if [[ -n "$SLACK_WEBHOOK" ]]; then
         log_info "Sending notification to Slack..."
-        
+
         local message="Filesystem security scan completed for AI Trading Bot. Check reports in security/trivy/reports/"
-        
+
         curl -X POST -H 'Content-type: application/json' \
             --data "{\"text\":\"$message\"}" \
             "$SLACK_WEBHOOK" || log_warning "Failed to send Slack notification"
@@ -586,14 +586,14 @@ send_notification() {
 archive_reports() {
     if [[ "$SAVE_REPORTS" == true ]]; then
         log_info "Archiving reports..."
-        
+
         cp -r "$REPORTS_DIR"/filesystem/*_${TIMESTAMP}* "$REPORTS_DIR/archive/$TIMESTAMP/" 2>/dev/null || true
         cp -r "$REPORTS_DIR"/secrets/*_${TIMESTAMP}* "$REPORTS_DIR/archive/$TIMESTAMP/" 2>/dev/null || true
         cp -r "$REPORTS_DIR"/configs/*_${TIMESTAMP}* "$REPORTS_DIR/archive/$TIMESTAMP/" 2>/dev/null || true
         cp -r "$REPORTS_DIR"/licenses/*_${TIMESTAMP}* "$REPORTS_DIR/archive/$TIMESTAMP/" 2>/dev/null || true
         cp -r "$REPORTS_DIR"/dependencies/*_${TIMESTAMP}* "$REPORTS_DIR/archive/$TIMESTAMP/" 2>/dev/null || true
         cp "$REPORTS_DIR/filesystem_summary_${TIMESTAMP}.md" "$REPORTS_DIR/archive/$TIMESTAMP/" 2>/dev/null || true
-        
+
         log_success "Reports archived to: $REPORTS_DIR/archive/$TIMESTAMP/"
     fi
 }
@@ -643,7 +643,7 @@ EOF
 # Main function
 main() {
     log_info "Starting filesystem and configuration vulnerability scan..."
-    
+
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -698,36 +698,36 @@ main() {
                 ;;
         esac
     done
-    
+
     # Check if Trivy is installed
     if ! command -v trivy >/dev/null 2>&1; then
         log_error "Trivy is not installed. Run ./install-trivy.sh first."
         exit 1
     fi
-    
+
     # Setup directories
     setup_directories
-    
+
     # Update Trivy database
     log_info "Updating Trivy database..."
     trivy image --download-db-only || log_warning "Failed to update database"
-    
+
     # Run scans
     scan_filesystem_vulnerabilities
     scan_secrets
     scan_configurations
     scan_licenses
     scan_dependencies
-    
+
     # Generate summary
     generate_summary
-    
+
     # Archive reports
     archive_reports
-    
+
     # Send notifications
     send_notification
-    
+
     log_success "Filesystem vulnerability scan completed!"
     log_info "Reports saved to: $REPORTS_DIR"
 }

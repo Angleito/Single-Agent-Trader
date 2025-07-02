@@ -67,26 +67,26 @@ check_root() {
 # Function to install Trivy on Ubuntu/Debian
 install_ubuntu() {
     log_info "Installing Trivy on Ubuntu/Debian..."
-    
+
     # Install dependencies
     sudo apt-get update
     sudo apt-get install -y wget apt-transport-https gnupg lsb-release
-    
+
     # Add Trivy repository
     wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
     echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
-    
+
     # Install Trivy
     sudo apt-get update
     sudo apt-get install -y trivy
-    
+
     log_success "Trivy installed successfully via APT"
 }
 
 # Function to install Trivy on CentOS/RHEL
 install_centos() {
     log_info "Installing Trivy on CentOS/RHEL..."
-    
+
     # Add Trivy repository
     sudo tee /etc/yum.repos.d/trivy.repo <<EOF
 [trivy]
@@ -96,21 +96,21 @@ gpgcheck=1
 enabled=1
 gpgkey=https://aquasecurity.github.io/trivy-repo/rpm/public.key
 EOF
-    
+
     # Install Trivy
     sudo yum -y update
     sudo yum -y install trivy
-    
+
     log_success "Trivy installed successfully via YUM"
 }
 
 # Function to install Trivy on Alpine
 install_alpine() {
     log_info "Installing Trivy on Alpine..."
-    
+
     # Install dependencies
     apk add --no-cache wget ca-certificates
-    
+
     # Download and install Trivy binary
     install_binary
 }
@@ -118,7 +118,7 @@ install_alpine() {
 # Function to install Trivy on macOS
 install_macos() {
     log_info "Installing Trivy on macOS..."
-    
+
     if command -v brew >/dev/null 2>&1; then
         # Install via Homebrew
         brew install trivy
@@ -132,7 +132,7 @@ install_macos() {
 # Function to install Trivy binary directly
 install_binary() {
     log_info "Installing Trivy binary directly..."
-    
+
     # Detect architecture
     ARCH=$(uname -m)
     case $ARCH in
@@ -141,7 +141,7 @@ install_binary() {
         armv7l) ARCH="ARM" ;;
         *) log_error "Unsupported architecture: $ARCH"; exit 1 ;;
     esac
-    
+
     # Detect OS for binary
     OS=$(uname -s)
     case $OS in
@@ -149,20 +149,20 @@ install_binary() {
         Darwin) OS="macOS" ;;
         *) log_error "Unsupported OS: $OS"; exit 1 ;;
     esac
-    
+
     # Download URL
     DOWNLOAD_URL="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_${OS}-${ARCH}.tar.gz"
-    
+
     log_info "Downloading Trivy from: $DOWNLOAD_URL"
-    
+
     # Create temporary directory
     TEMP_DIR=$(mktemp -d)
     cd "$TEMP_DIR"
-    
+
     # Download and extract
     wget -q "$DOWNLOAD_URL" -O trivy.tar.gz
     tar -xzf trivy.tar.gz
-    
+
     # Install binary
     if check_root; then
         cp trivy "$INSTALL_DIR/"
@@ -171,22 +171,22 @@ install_binary() {
         sudo cp trivy "$INSTALL_DIR/"
         sudo chmod +x "$INSTALL_DIR/trivy"
     fi
-    
+
     # Cleanup
     cd /
     rm -rf "$TEMP_DIR"
-    
+
     log_success "Trivy binary installed successfully"
 }
 
 # Function to create configuration directories
 setup_directories() {
     log_info "Setting up Trivy directories..."
-    
+
     # Create cache directory
     mkdir -p "$CACHE_DIR"
     chmod 755 "$CACHE_DIR"
-    
+
     # Create config directory
     if check_root; then
         mkdir -p "$CONFIG_DIR"
@@ -195,17 +195,17 @@ setup_directories() {
         sudo mkdir -p "$CONFIG_DIR"
         sudo chmod 755 "$CONFIG_DIR"
     fi
-    
+
     log_success "Directories created successfully"
 }
 
 # Function to copy configuration files
 setup_config() {
     log_info "Setting up Trivy configuration..."
-    
+
     # Get script directory
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    
+
     # Copy configuration file
     if [[ -f "$SCRIPT_DIR/trivy-config.yaml" ]]; then
         if check_root; then
@@ -222,22 +222,22 @@ setup_config() {
 # Function to update Trivy database
 update_database() {
     log_info "Updating Trivy vulnerability database..."
-    
+
     # Update vulnerability database
     trivy image --download-db-only
-    
+
     log_success "Vulnerability database updated successfully"
 }
 
 # Function to verify installation
 verify_installation() {
     log_info "Verifying Trivy installation..."
-    
+
     # Check if Trivy is installed
     if command -v trivy >/dev/null 2>&1; then
         VERSION=$(trivy --version | head -n1)
         log_success "Trivy installed successfully: $VERSION"
-        
+
         # Test with a simple scan
         log_info "Running test scan..."
         if trivy image --quiet --format table hello-world >/dev/null 2>&1; then
@@ -255,7 +255,7 @@ verify_installation() {
 setup_service() {
     if [[ "$1" == "--server" ]]; then
         log_info "Setting up Trivy server service..."
-        
+
         # Create systemd service file
         sudo tee /etc/systemd/system/trivy-server.service >/dev/null <<EOF
 [Unit]
@@ -285,16 +285,16 @@ AmbientCapabilities=CAP_NET_BIND_SERVICE
 [Install]
 WantedBy=multi-user.target
 EOF
-        
+
         # Create trivy user
         sudo useradd -r -s /bin/false -d /var/cache/trivy trivy 2>/dev/null || true
         sudo mkdir -p /var/cache/trivy
         sudo chown trivy:trivy /var/cache/trivy
-        
+
         # Enable and start service
         sudo systemctl daemon-reload
         sudo systemctl enable trivy-server
-        
+
         log_success "Trivy server service configured"
         log_info "Start with: sudo systemctl start trivy-server"
     fi
@@ -338,7 +338,7 @@ EOF
 # Main installation function
 main() {
     log_info "Starting Trivy installation for AI Trading Bot..."
-    
+
     # Parse arguments
     SERVER_MODE=false
     while [[ $# -gt 0 ]]; do
@@ -358,11 +358,11 @@ main() {
                 ;;
         esac
     done
-    
+
     # Detect operating system
     OS=$(detect_os)
     log_info "Detected OS: $OS"
-    
+
     # Install Trivy based on OS
     case $OS in
         ubuntu)
@@ -382,17 +382,17 @@ main() {
             install_binary
             ;;
     esac
-    
+
     # Setup directories and configuration
     setup_directories
     setup_config
-    
+
     # Update database
     update_database
-    
+
     # Verify installation
     verify_installation
-    
+
     # Setup server if requested
     if [[ "$SERVER_MODE" == true ]]; then
         if [[ "$OS" != "ubuntu" && "$OS" != "centos" ]]; then
@@ -401,7 +401,7 @@ main() {
             setup_service --server
         fi
     fi
-    
+
     log_success "Trivy installation completed successfully!"
     log_info "Next steps:"
     log_info "1. Run: ./scan-images.sh to scan Docker images"

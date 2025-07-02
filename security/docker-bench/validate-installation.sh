@@ -37,7 +37,7 @@ error() { log "ERROR" "${RED}$1${NC}"; TESTS_FAILED=$((TESTS_FAILED + 1)); }
 # Test functions
 test_directory_structure() {
     info "Testing directory structure..."
-    
+
     local required_dirs=(
         "scripts"
         "remediation"
@@ -47,7 +47,7 @@ test_directory_structure() {
         "custom-checks"
         "templates"
     )
-    
+
     for dir in "${required_dirs[@]}"; do
         if [ -d "${SCRIPT_DIR}/${dir}" ]; then
             success "Directory exists: $dir"
@@ -59,7 +59,7 @@ test_directory_structure() {
 
 test_script_files() {
     info "Testing script files..."
-    
+
     local required_scripts=(
         "install-docker-bench.sh"
         "scripts/run-security-scan.sh"
@@ -69,7 +69,7 @@ test_script_files() {
         "monitoring/security-monitor.sh"
         "cicd/security-gate.sh"
     )
-    
+
     for script in "${required_scripts[@]}"; do
         local script_path="${SCRIPT_DIR}/${script}"
         if [ -f "$script_path" ]; then
@@ -86,13 +86,13 @@ test_script_files() {
 
 test_configuration_files() {
     info "Testing configuration files..."
-    
+
     local config_files=(
         "config/security-automation.conf"
         "config/security-monitor.conf"
         "config/remediation.conf"
     )
-    
+
     for config in "${config_files[@]}"; do
         local config_path="${SCRIPT_DIR}/${config}"
         if [ -f "$config_path" ]; then
@@ -105,13 +105,13 @@ test_configuration_files() {
 
 test_custom_checks() {
     info "Testing custom security checks..."
-    
+
     local custom_checks=(
         "custom-checks/8_1_crypto_security.sh"
         "custom-checks/8_2_trading_network.sh"
         "custom-checks/8_3_data_persistence.sh"
     )
-    
+
     for check in "${custom_checks[@]}"; do
         local check_path="${SCRIPT_DIR}/${check}"
         if [ -f "$check_path" ]; then
@@ -128,9 +128,9 @@ test_custom_checks() {
 
 test_system_dependencies() {
     info "Testing system dependencies..."
-    
+
     local required_tools=("docker" "git" "curl" "jq" "awk" "grep")
-    
+
     for tool in "${required_tools[@]}"; do
         if command -v "$tool" &> /dev/null; then
             success "System dependency available: $tool"
@@ -138,7 +138,7 @@ test_system_dependencies() {
             error "Missing system dependency: $tool"
         fi
     done
-    
+
     # Test Docker access
     if docker info &> /dev/null; then
         success "Docker daemon accessible"
@@ -149,18 +149,18 @@ test_system_dependencies() {
 
 test_github_actions_workflow() {
     info "Testing GitHub Actions workflow..."
-    
+
     local workflow_file="${PROJECT_ROOT}/.github/workflows/security-gate.yml"
     if [ -f "$workflow_file" ]; then
         success "GitHub Actions security workflow exists"
-        
+
         # Basic syntax validation
         if grep -q "name: Security Gate" "$workflow_file"; then
             success "Workflow has correct name"
         else
             error "Workflow missing or incorrect name"
         fi
-        
+
         if grep -q "docker-bench-security" "$workflow_file"; then
             success "Workflow references Docker Bench Security"
         else
@@ -173,26 +173,26 @@ test_github_actions_workflow() {
 
 test_integration_with_trading_bot() {
     info "Testing integration with trading bot..."
-    
+
     # Check if trading bot docker-compose file exists
     local compose_file="${PROJECT_ROOT}/docker-compose.yml"
     if [ -f "$compose_file" ]; then
         success "Docker Compose file found"
-        
+
         # Check for trading bot services
         if grep -q "ai-trading-bot" "$compose_file"; then
             success "AI trading bot service found in compose file"
         else
             warning "AI trading bot service not found in compose file"
         fi
-        
+
         # Check for security configurations
         if grep -q "security_opt" "$compose_file"; then
             success "Security options configured in compose file"
         else
             warning "No security options found in compose file"
         fi
-        
+
         if grep -q "read_only:" "$compose_file"; then
             success "Read-only filesystem configurations found"
         else
@@ -205,7 +205,7 @@ test_integration_with_trading_bot() {
 
 test_script_syntax() {
     info "Testing script syntax..."
-    
+
     # Find all shell scripts and test syntax
     find "$SCRIPT_DIR" -name "*.sh" | while read -r script; do
         if bash -n "$script" 2>/dev/null; then
@@ -218,7 +218,7 @@ test_script_syntax() {
 
 run_basic_functionality_test() {
     info "Running basic functionality tests..."
-    
+
     # Test configuration loading
     local test_config="${SCRIPT_DIR}/config/security-automation.conf"
     if [ -f "$test_config" ]; then
@@ -228,14 +228,14 @@ run_basic_functionality_test() {
             error "Configuration file has syntax errors"
         fi
     fi
-    
+
     # Test help outputs
     local scripts_to_test=(
         "scripts/security-automation.sh"
         "monitoring/security-monitor.sh"
         "cicd/security-gate.sh"
     )
-    
+
     for script in "${scripts_to_test[@]}"; do
         local script_path="${SCRIPT_DIR}/${script}"
         if [ -f "$script_path" ]; then
@@ -251,7 +251,7 @@ run_basic_functionality_test() {
 
 test_permissions() {
     info "Testing file permissions..."
-    
+
     # Check script permissions
     find "$SCRIPT_DIR" -name "*.sh" | while read -r script; do
         if [ -x "$script" ]; then
@@ -260,7 +260,7 @@ test_permissions() {
             error "Script not executable: $(basename "$script")"
         fi
     done
-    
+
     # Check directory permissions
     local required_dirs=("logs" "reports" "metrics" "alerts" "backups")
     for dir in "${required_dirs[@]}"; do
@@ -287,47 +287,47 @@ main() {
     echo "🔒 Docker Bench Security Installation Validation"
     echo "=================================================="
     echo
-    
+
     info "Starting validation of Docker Bench Security automation installation..."
     echo
-    
+
     # Run all tests
     test_directory_structure
     echo
-    
+
     test_script_files
     echo
-    
+
     test_configuration_files
     echo
-    
+
     test_custom_checks
     echo
-    
+
     test_system_dependencies
     echo
-    
+
     test_github_actions_workflow
     echo
-    
+
     test_integration_with_trading_bot
     echo
-    
+
     test_script_syntax
     echo
-    
+
     run_basic_functionality_test
     echo
-    
+
     test_permissions
     echo
-    
+
     # Summary
     echo "=================================================="
     echo "🔒 VALIDATION SUMMARY"
     echo "=================================================="
     echo
-    
+
     if [ $TESTS_FAILED -eq 0 ]; then
         success "✅ ALL TESTS PASSED!"
         echo

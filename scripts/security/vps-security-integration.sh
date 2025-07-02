@@ -61,9 +61,9 @@ log_security_event() {
     local component="$2"
     local message="$3"
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    
+
     echo "[$timestamp] [$level] [$component] $message" >> "$LOG_DIR/security-integration.log"
-    
+
     # Send to syslog for centralized logging
     logger -t "ai-trading-bot-security" -p "security.$level" "[$component] $message"
 }
@@ -80,17 +80,17 @@ check_root() {
 # Create necessary directories
 setup_directories() {
     print_section "Setting Up Security Directories"
-    
+
     mkdir -p "$INTEGRATION_CONFIG_DIR"
     mkdir -p "$LOG_DIR"
     mkdir -p "$SECURITY_CONFIG_DIR/backup"
     mkdir -p "$SECURITY_CONFIG_DIR/monitoring"
     mkdir -p "$SECURITY_CONFIG_DIR/automation"
-    
+
     # Set proper permissions
     chmod 750 "$LOG_DIR"
     chmod 700 "$SECURITY_CONFIG_DIR"
-    
+
     print_success "Security directories created"
     log_security_event "info" "setup" "Security directories initialized"
 }
@@ -98,10 +98,10 @@ setup_directories() {
 # Configure UFW firewall integration with Docker
 configure_ufw_docker_integration() {
     print_section "Configuring UFW-Docker Integration"
-    
+
     # Backup existing UFW configuration
     cp /etc/ufw/before.rules /etc/ufw/before.rules.backup 2>/dev/null || true
-    
+
     # Create UFW rules for Docker integration
     cat > "$UFW_RULES_FILE" << 'EOF'
 # UFW Rules for AI Trading Bot Docker Integration
@@ -151,18 +151,18 @@ EOF
     ufw --force reset
     ufw default deny incoming
     ufw default allow outgoing
-    
+
     # Allow SSH (custom port)
     ufw allow 2222/tcp comment 'SSH'
-    
+
     # Allow HTTPS for API calls
     ufw allow out 443/tcp comment 'HTTPS outbound'
-    
+
     # Allow specific trading bot ports if needed
     # ufw allow 8080/tcp comment 'Dashboard'
-    
+
     ufw --force enable
-    
+
     print_success "UFW-Docker integration configured"
     log_security_event "info" "firewall" "UFW-Docker integration enabled"
 }
@@ -170,7 +170,7 @@ EOF
 # Configure fail2ban for container logs
 configure_fail2ban_integration() {
     print_section "Configuring Fail2ban Container Integration"
-    
+
     # Create fail2ban configuration for AI trading bot
     cat > "$FAIL2BAN_CONFIG" << 'EOF'
 [DEFAULT]
@@ -207,7 +207,7 @@ EOF
 
     # Create custom fail2ban filters
     mkdir -p /etc/fail2ban/filter.d
-    
+
     # Filter for trading bot authentication failures
     cat > /etc/fail2ban/filter.d/ai-trading-bot-auth.conf << 'EOF'
 [Definition]
@@ -238,7 +238,7 @@ EOF
     # Enable and restart fail2ban
     systemctl enable fail2ban
     systemctl restart fail2ban
-    
+
     print_success "Fail2ban container integration configured"
     log_security_event "info" "fail2ban" "Container log monitoring enabled"
 }
@@ -246,10 +246,10 @@ EOF
 # Configure Docker daemon security
 configure_docker_security() {
     print_section "Configuring Docker Daemon Security"
-    
+
     # Backup existing Docker daemon configuration
     cp /etc/docker/daemon.json /etc/docker/daemon.json.backup 2>/dev/null || true
-    
+
     # Enhanced Docker daemon security configuration
     cat > "$DOCKER_SECURITY_CONFIG" << 'EOF'
 {
@@ -278,7 +278,7 @@ configure_docker_security() {
     },
     "nproc": {
       "Hard": 8192,
-      "Name": "nproc", 
+      "Name": "nproc",
       "Soft": 4096
     }
   },
@@ -312,7 +312,7 @@ EOF
     {
       "names": [
         "accept",
-        "accept4", 
+        "accept4",
         "access",
         "bind",
         "brk",
@@ -377,14 +377,14 @@ EOF
     if ! id dockremap >/dev/null 2>&1; then
         useradd -r -s /bin/false dockremap
     fi
-    
+
     echo "dockremap:165536:65536" > /etc/subuid
     echo "dockremap:165536:65536" > /etc/subgid
-    
+
     # Restart Docker daemon
     systemctl daemon-reload
     systemctl restart docker
-    
+
     print_success "Docker daemon security configured"
     log_security_event "info" "docker" "Enhanced security configuration applied"
 }
@@ -392,11 +392,11 @@ EOF
 # Setup system monitoring integration
 setup_monitoring_integration() {
     print_section "Setting Up Security Monitoring Integration"
-    
+
     # Install security monitoring tools
     apt-get update
     apt-get install -y auditd aide rkhunter osquery
-    
+
     # Configure auditd for container monitoring
     cat >> /etc/audit/rules.d/ai-trading-bot.rules << 'EOF'
 # AI Trading Bot Security Audit Rules
@@ -422,7 +422,7 @@ EOF
 
     # Initialize AIDE database
     aideinit --yes --force
-    
+
     # Setup osquery for security monitoring
     cat > /etc/osquery/osquery.conf << 'EOF'
 {
@@ -468,7 +468,7 @@ EOF
     # Start monitoring services
     systemctl enable auditd aide osqueryd
     systemctl restart auditd osqueryd
-    
+
     print_success "Security monitoring integration configured"
     log_security_event "info" "monitoring" "Security monitoring services enabled"
 }
@@ -476,7 +476,7 @@ EOF
 # Setup Digital Ocean cloud firewall automation
 setup_digitalocean_firewall() {
     print_section "Setting Up Digital Ocean Cloud Firewall"
-    
+
     # Check if doctl is installed
     if ! command -v doctl >/dev/null 2>&1; then
         print_warning "doctl not installed. Installing..."
@@ -484,7 +484,7 @@ setup_digitalocean_firewall() {
         mv doctl /usr/local/bin/
         chmod +x /usr/local/bin/doctl
     fi
-    
+
     # Create firewall automation script
     cat > "$SECURITY_CONFIG_DIR/automation/digitalocean-firewall.sh" << 'EOF'
 #!/bin/bash
@@ -508,7 +508,7 @@ fi
 # Create or update firewall rules
 create_firewall_rules() {
     local firewall_id=$(doctl compute firewall list --format ID,Name | grep "$FIREWALL_NAME" | cut -d' ' -f1)
-    
+
     if [[ -z "$firewall_id" ]]; then
         # Create new firewall
         doctl compute firewall create \
@@ -519,7 +519,7 @@ create_firewall_rules() {
             --outbound-rules "protocol:tcp,ports:80,destinations:addresses:0.0.0.0/0,::0/0" \
             --outbound-rules "protocol:udp,ports:53,destinations:addresses:0.0.0.0/0,::0/0" \
             --tag-names "$DROPLET_TAG"
-        
+
         echo "Created new firewall: $FIREWALL_NAME"
     else
         echo "Firewall already exists: $firewall_id"
@@ -534,7 +534,7 @@ update_threat_protection() {
         "185.220.100.0/24"  # Tor exit nodes example
         "198.98.51.0/24"    # Known scanner networks
     )
-    
+
     for ip in "${malicious_ips[@]}"; do
         # Block malicious IPs
         doctl compute firewall add-rules "$firewall_id" \
@@ -548,7 +548,7 @@ update_threat_protection() {
 main() {
     create_firewall_rules
     update_threat_protection
-    
+
     echo "Digital Ocean firewall automation complete"
 }
 
@@ -556,7 +556,7 @@ main "$@"
 EOF
 
     chmod +x "$SECURITY_CONFIG_DIR/automation/digitalocean-firewall.sh"
-    
+
     print_success "Digital Ocean firewall automation configured"
     log_security_event "info" "cloud-firewall" "Digital Ocean firewall automation setup"
 }
@@ -564,7 +564,7 @@ EOF
 # Setup security alert correlation
 setup_alert_correlation() {
     print_section "Setting Up Security Alert Correlation"
-    
+
     # Create alert configuration
     cat > "$ALERT_CONFIG" << 'EOF'
 {
@@ -665,10 +665,10 @@ class SecurityAlertCorrelator:
     def __init__(self, config_path):
         with open(config_path, 'r') as f:
             self.config = json.load(f)
-        
+
         self.events = defaultdict(list)
         self.setup_logging()
-    
+
     def setup_logging(self):
         logging.basicConfig(
             level=logging.INFO,
@@ -679,7 +679,7 @@ class SecurityAlertCorrelator:
             ]
         )
         self.logger = logging.getLogger('SecurityCorrelator')
-    
+
     def monitor_logs(self):
         """Monitor security logs for events"""
         for source in self.config['alert_sources']:
@@ -687,7 +687,7 @@ class SecurityAlertCorrelator:
                 log_path = Path(source['log_path'])
                 if not log_path.exists():
                     continue
-                
+
                 # Tail log file (simplified implementation)
                 with open(log_path, 'r') as f:
                     f.seek(0, 2)  # Go to end of file
@@ -696,12 +696,12 @@ class SecurityAlertCorrelator:
                         if not line:
                             time.sleep(1)
                             continue
-                        
+
                         self.process_log_line(source, line.strip())
-            
+
             except Exception as e:
                 self.logger.error(f"Error monitoring {source['name']}: {e}")
-    
+
     def process_log_line(self, source, line):
         """Process a single log line for security events"""
         for pattern in source['patterns']:
@@ -713,76 +713,76 @@ class SecurityAlertCorrelator:
                     'line': line,
                     'timestamp': datetime.now().isoformat()
                 }
-                
+
                 self.events[source['name']].append(event)
                 self.logger.info(f"Security event detected: {source['name']} - {pattern}")
-                
+
                 # Check correlation rules
                 self.check_correlation_rules()
                 break
-    
+
     def check_correlation_rules(self):
         """Check if events match correlation rules"""
         for rule in self.config['correlation_rules']:
             if self.evaluate_rule(rule):
                 self.trigger_response(rule)
-    
+
     def evaluate_rule(self, rule):
         """Evaluate if a correlation rule is triggered"""
         # Simplified rule evaluation
         # In production, this would be more sophisticated
         return len(self.events) > 0
-    
+
     def trigger_response(self, rule):
         """Trigger appropriate security response"""
         self.logger.warning(f"Correlation rule triggered: {rule['name']}")
-        
+
         if rule['action'] == 'immediate_alert':
             self.send_alert(f"Security correlation detected: {rule['name']}", 'warning')
         elif rule['action'] == 'emergency_response':
             self.send_alert(f"EMERGENCY: {rule['name']}", 'critical')
             self.emergency_response()
-    
+
     def send_alert(self, message, severity):
         """Send security alert to configured channels"""
         for channel in self.config['notification_channels']:
             if not channel['enabled']:
                 continue
-            
+
             try:
                 if channel['type'] == 'webhook':
                     self.send_webhook_alert(channel, message, severity)
                 elif channel['type'] == 'email':
                     self.send_email_alert(channel, message, severity)
-            
+
             except Exception as e:
                 self.logger.error(f"Failed to send alert via {channel['name']}: {e}")
-    
+
     def send_webhook_alert(self, channel, message, severity):
         """Send alert via webhook"""
         if not channel.get('url'):
             return
-        
+
         payload = {
             'text': f"🚨 AI Trading Bot Security Alert [{severity.upper()}]: {message}",
             'severity': severity,
             'timestamp': datetime.now().isoformat(),
             'host': 'trading-bot-vps'
         }
-        
+
         requests.post(channel['url'], json=payload, timeout=10)
-    
+
     def emergency_response(self):
         """Execute emergency security response"""
         self.logger.critical("EXECUTING EMERGENCY SECURITY RESPONSE")
-        
+
         # Lock down system (example actions)
         # In production, this might include:
         # - Blocking all external access
         # - Stopping containers
         # - Creating security snapshots
         # - Notifying administrators
-        
+
         pass
 
 if __name__ == '__main__':
@@ -791,7 +791,7 @@ if __name__ == '__main__':
 EOF
 
     chmod +x "$SECURITY_CONFIG_DIR/automation/alert-correlator.py"
-    
+
     print_success "Security alert correlation configured"
     log_security_event "info" "alerts" "Alert correlation system initialized"
 }
@@ -799,7 +799,7 @@ EOF
 # Setup backup and disaster recovery integration
 setup_backup_integration() {
     print_section "Setting Up Security Backup Integration"
-    
+
     # Create security backup script
     cat > "$SECURITY_CONFIG_DIR/automation/security-backup.sh" << 'EOF'
 #!/bin/bash
@@ -842,17 +842,17 @@ tar czf "$(basename "$BACKUP_DIR").tar.gz" "$(basename "$BACKUP_DIR")"
 # Upload to Digital Ocean Spaces
 if [[ -n "$DO_SPACES_KEY" && -n "$DO_SPACES_SECRET" ]]; then
     echo "Uploading backup to Digital Ocean Spaces..."
-    
+
     # Configure AWS CLI for Digital Ocean Spaces
     aws configure set aws_access_key_id "$DO_SPACES_KEY"
     aws configure set aws_secret_access_key "$DO_SPACES_SECRET"
     aws configure set default.region us-east-1
-    
+
     # Upload backup
     aws s3 cp "$(basename "$BACKUP_DIR").tar.gz" \
         "s3://$DO_SPACES_BUCKET/security-backups/" \
         --endpoint-url "https://$DO_SPACES_ENDPOINT"
-    
+
     echo "Backup uploaded successfully"
 else
     echo "Digital Ocean Spaces credentials not configured - backup saved locally"
@@ -864,10 +864,10 @@ echo "Security backup completed: $(basename "$BACKUP_DIR").tar.gz"
 EOF
 
     chmod +x "$SECURITY_CONFIG_DIR/automation/security-backup.sh"
-    
+
     # Add to crontab for regular backups
     (crontab -l 2>/dev/null; echo "0 2 * * * $SECURITY_CONFIG_DIR/automation/security-backup.sh >> $LOG_DIR/backup.log 2>&1") | crontab -
-    
+
     print_success "Security backup integration configured"
     log_security_event "info" "backup" "Security backup automation enabled"
 }
@@ -875,7 +875,7 @@ EOF
 # Setup incident response automation
 setup_incident_response() {
     print_section "Setting Up Incident Response Automation"
-    
+
     # Create incident response playbook
     cat > "$SECURITY_CONFIG_DIR/automation/incident-response.sh" << 'EOF'
 #!/bin/bash
@@ -899,51 +899,51 @@ log_incident() {
 # Incident response actions
 isolate_container() {
     log_incident "Isolating compromised containers"
-    
+
     # Stop all trading bot containers
     docker compose -f /opt/ai-trading-bot/docker-compose.yml down || true
-    
+
     # Create network isolation
     docker network create --internal incident-quarantine || true
-    
+
     log_incident "Container isolation complete"
 }
 
 create_forensic_snapshot() {
     log_incident "Creating forensic snapshot"
-    
+
     # Create memory dump
     mkdir -p /opt/forensics/$(date +%Y%m%d-%H%M%S)
-    
+
     # Dump container state
     docker ps -a > /opt/forensics/$(date +%Y%m%d-%H%M%S)/containers.txt
     docker logs ai-trading-bot > /opt/forensics/$(date +%Y%m%d-%H%M%S)/bot-logs.txt 2>&1 || true
-    
+
     # Copy security logs
     cp -r "$LOG_DIR" /opt/forensics/$(date +%Y%m%d-%H%M%S)/security-logs/
-    
+
     log_incident "Forensic snapshot created"
 }
 
 emergency_shutdown() {
     log_incident "EXECUTING EMERGENCY SHUTDOWN"
-    
+
     # Stop all containers
     docker stop $(docker ps -q) 2>/dev/null || true
-    
+
     # Block all network traffic except SSH
     ufw --force reset
     ufw default deny incoming
     ufw default deny outgoing
     ufw allow 2222/tcp
     ufw --force enable
-    
+
     # Send emergency notification
     curl -X POST "${EMERGENCY_WEBHOOK_URL:-}" \
         -H "Content-Type: application/json" \
         -d "{\"text\":\"🚨 EMERGENCY SHUTDOWN: AI Trading Bot system has been locked down due to security incident\",\"severity\":\"critical\"}" \
         2>/dev/null || true
-    
+
     log_incident "Emergency shutdown complete"
 }
 
@@ -957,7 +957,7 @@ case "$INCIDENT_TYPE" in
             emergency_shutdown
         fi
         ;;
-    
+
     "coordinated_attack")
         log_incident "Coordinated attack detected - implementing defense"
         # Enhanced firewall rules
@@ -965,14 +965,14 @@ case "$INCIDENT_TYPE" in
         ufw allow from $(curl -s ipinfo.io/ip)/32 to any port 2222
         create_forensic_snapshot
         ;;
-    
+
     "data_exfiltration")
         log_incident "Data exfiltration attempt detected"
         isolate_container
         create_forensic_snapshot
         emergency_shutdown
         ;;
-    
+
     *)
         log_incident "Unknown incident type: $INCIDENT_TYPE"
         create_forensic_snapshot
@@ -983,7 +983,7 @@ log_incident "Incident response completed for $INCIDENT_TYPE"
 EOF
 
     chmod +x "$SECURITY_CONFIG_DIR/automation/incident-response.sh"
-    
+
     print_success "Incident response automation configured"
     log_security_event "info" "incident-response" "Automated incident response system enabled"
 }
@@ -991,7 +991,7 @@ EOF
 # Create security integration health check
 create_health_check() {
     print_section "Creating Security Integration Health Check"
-    
+
     cat > "$SECURITY_CONFIG_DIR/monitoring/security-health-check.sh" << 'EOF'
 #!/bin/bash
 # Security Integration Health Check
@@ -1010,7 +1010,7 @@ HEALTH_STATUS=0
 check_service() {
     local service="$1"
     local description="$2"
-    
+
     if systemctl is-active --quiet "$service"; then
         echo -e "${GREEN}✓${NC} $description ($service)"
         return 0
@@ -1023,7 +1023,7 @@ check_service() {
 check_file() {
     local file="$1"
     local description="$2"
-    
+
     if [[ -f "$file" ]]; then
         echo -e "${GREEN}✓${NC} $description"
         return 0
@@ -1094,20 +1094,20 @@ fi
 EOF
 
     chmod +x "$SECURITY_CONFIG_DIR/monitoring/security-health-check.sh"
-    
+
     # Add health check to cron
     (crontab -l 2>/dev/null; echo "*/15 * * * * $SECURITY_CONFIG_DIR/monitoring/security-health-check.sh >> $LOG_DIR/health-check.log 2>&1") | crontab -
-    
+
     print_success "Security health check configured"
 }
 
 # Main integration setup function
 main() {
     print_header "VPS Security Integration for AI Trading Bot"
-    
+
     # Check prerequisites
     check_root
-    
+
     # Run integration steps
     setup_directories
     configure_ufw_docker_integration
@@ -1119,23 +1119,23 @@ main() {
     setup_backup_integration
     setup_incident_response
     create_health_check
-    
+
     print_header "Security Integration Complete!"
     print_success "VPS security integration has been successfully configured"
-    
+
     echo -e "\n${BLUE}Next Steps:${NC}"
     echo "1. Configure Digital Ocean API token: export DO_TOKEN=your_token"
     echo "2. Set up security webhook: export SECURITY_WEBHOOK_URL=your_webhook"
     echo "3. Configure backup credentials: export DO_SPACES_KEY and DO_SPACES_SECRET"
     echo "4. Test the integration: $SECURITY_CONFIG_DIR/monitoring/security-health-check.sh"
     echo "5. Review logs: tail -f $LOG_DIR/security-integration.log"
-    
+
     echo -e "\n${YELLOW}Important Files:${NC}"
     echo "- Security config: $SECURITY_CONFIG_DIR/"
     echo "- Alert config: $ALERT_CONFIG"
     echo "- Security logs: $LOG_DIR/"
     echo "- Health check: $SECURITY_CONFIG_DIR/monitoring/security-health-check.sh"
-    
+
     log_security_event "info" "integration" "VPS security integration setup completed successfully"
 }
 

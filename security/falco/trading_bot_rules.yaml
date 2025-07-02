@@ -9,15 +9,15 @@
 - rule: Trading Credentials Access
   desc: Detect unauthorized access to trading API keys and private keys
   condition: >
-    open_read and 
-    (fd.name contains "/run/secrets/" or 
-     fd.name contains "api_key" or 
+    open_read and
+    (fd.name contains "/run/secrets/" or
+     fd.name contains "api_key" or
      fd.name contains "private_key" or
      fd.name contains ".env") and
     not proc.name in (python, python3, cat, head, tail, grep) and
     not container.name in (ai-trading-bot, bluefin-service, dashboard-backend)
   output: >
-    Unauthorized access to trading credentials 
+    Unauthorized access to trading credentials
     (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [trading, credentials, security]
@@ -34,7 +34,7 @@
     not proc.name in (python, python3) and
     not container.name in (ai-trading-bot, bluefin-service, dashboard-backend)
   output: >
-    Unauthorized trading configuration modification 
+    Unauthorized trading configuration modification
     (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [trading, configuration, tampering]
@@ -45,7 +45,7 @@
   condition: >
     outbound and
     container.name in (ai-trading-bot, bluefin-service) and
-    not fd.rip in (api.coinbase.com, coinbase.com, bluefin.trade, api.bluefin.trade, 
+    not fd.rip in (api.coinbase.com, coinbase.com, bluefin.trade, api.bluefin.trade,
                    openai.com, api.openai.com, googleapis.com, github.com) and
     not fd.rip startswith "172." and
     not fd.rip startswith "10." and
@@ -53,7 +53,7 @@
     not fd.rip="127.0.0.1" and
     not fd.rport in (80, 443, 8080, 8765, 8767, 8000, 3000)
   output: >
-    Trading bot suspicious network connection 
+    Trading bot suspicious network connection
     (user=%user.name command=%proc.cmdline connection=%fd.rip:%fd.rport container=%container.name image=%container.image.repository)
   priority: WARNING
   tags: [trading, network, suspicious]
@@ -68,7 +68,7 @@
      (spawned_process and proc.args contains "setuid") or
      (spawned_process and proc.args contains "setcap"))
   output: >
-    Privilege escalation attempt in trading container 
+    Privilege escalation attempt in trading container
     (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [trading, privilege-escalation, container]
@@ -91,7 +91,7 @@
     not proc.name in (python, python3) and
     not container.name in (ai-trading-bot, dashboard-backend)
   output: >
-    Unauthorized access to trading data 
+    Unauthorized access to trading data
     (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
   priority: ALERT
   tags: [trading, data, unauthorized-access]
@@ -107,7 +107,7 @@
     not proc.name in (python, python3) and
     not container.name="ai-trading-bot"
   output: >
-    Unauthorized modification of position data 
+    Unauthorized modification of position data
     (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [trading, positions, tampering]
@@ -124,7 +124,7 @@
     not proc.name in (python, python3, logrotate) and
     not container.name in (ai-trading-bot, dashboard-backend)
   output: >
-    Unauthorized trading log modification 
+    Unauthorized trading log modification
     (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
   priority: ALERT
   tags: [trading, logs, tampering]
@@ -144,7 +144,7 @@
      (spawned_process and proc.args contains "nsenter") or
      (spawned_process and proc.args contains "unshare"))
   output: >
-    Container escape attempt detected 
+    Container escape attempt detected
     (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [trading, container-escape, security]
@@ -159,7 +159,7 @@
     not proc.args contains "/app/logs" and
     not proc.args contains "/app/data"
   output: >
-    Unauthorized mount operation in trading container 
+    Unauthorized mount operation in trading container
     (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [trading, mount, unauthorized]
@@ -179,7 +179,7 @@
      (spawned_process and proc.args contains "__import__") or
      (spawned_process and proc.name in (sh, bash, zsh, fish) and proc.args contains "-c"))
   output: >
-    Code injection attempt in trading bot 
+    Code injection attempt in trading bot
     (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [trading, code-injection, security]
@@ -194,7 +194,7 @@
      (spawned_process and proc.args contains "bash -i") or
      (spawned_process and proc.args contains "sh -i"))
   output: >
-    Reverse shell attempt from trading container 
+    Reverse shell attempt from trading container
     (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [trading, reverse-shell, security]
@@ -215,7 +215,7 @@
     not proc.args contains "bluefin.trade" and
     not proc.args contains "openai.com"
   output: >
-    Suspicious API key usage detected 
+    Suspicious API key usage detected
     (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: WARNING
   tags: [trading, api, suspicious]
@@ -230,7 +230,7 @@
     not fd.rip_name in (api.coinbase.com, api.bluefin.trade, api.openai.com) and
     fd.rport in (80, 443)
   output: >
-    Unauthorized API access from trading container 
+    Unauthorized API access from trading container
     (user=%user.name connection=%fd.rip:%fd.rport container=%container.name image=%container.image.repository)
   priority: WARNING
   tags: [trading, api, unauthorized]
@@ -249,7 +249,7 @@
     proc.name in (python, python3) and
     proc.args contains "malloc" or proc.args contains "allocate"
   output: >
-    Potential memory exhaustion attack 
+    Potential memory exhaustion attack
     (user=%user.name command=%proc.cmdline memory_used=%container.memory.used container=%container.name image=%container.image.repository)
   priority: WARNING
   tags: [trading, memory, exhaustion]
@@ -262,7 +262,7 @@
     container.cpu.usage > 95 and
     spawned_process
   output: >
-    Unusual CPU consumption spike 
+    Unusual CPU consumption spike
     (user=%user.name command=%proc.cmdline cpu_usage=%container.cpu.usage container=%container.name image=%container.image.repository)
   priority: WARNING
   tags: [trading, cpu, spike]
@@ -280,7 +280,7 @@
     ((fd.rport < 1024 and not fd.rport in (80, 443, 22)) or
      (spawned_process and proc.name in (nmap, masscan, zmap)))
   output: >
-    Port scanning detected from trading container 
+    Port scanning detected from trading container
     (user=%user.name command=%proc.cmdline connection=%fd.rip:%fd.rport container=%container.name image=%container.image.repository)
   priority: ALERT
   tags: [trading, port-scanning, network]
@@ -295,7 +295,7 @@
     fd.rip != "127.0.0.53" and
     not fd.rip_name in (cloudflare.com, google.com, quad9.net)
   output: >
-    Potential DNS tunneling from trading container 
+    Potential DNS tunneling from trading container
     (user=%user.name connection=%fd.rip:%fd.rport container=%container.name image=%container.image.repository)
   priority: WARNING
   tags: [trading, dns-tunneling, network]
@@ -310,10 +310,10 @@
   condition: >
     container.name in (ai-trading-bot, bluefin-service, dashboard-backend) and
     syscall and
-    syscall.type in (ptrace, process_vm_readv, process_vm_writev, syslog, 
+    syscall.type in (ptrace, process_vm_readv, process_vm_writev, syslog,
                      init_module, delete_module, create_module)
   output: >
-    Dangerous system call from trading container 
+    Dangerous system call from trading container
     (user=%user.name syscall=%syscall.type command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [trading, syscall, dangerous]
@@ -326,7 +326,7 @@
     ((spawned_process and proc.name in (insmod, modprobe, rmmod)) or
      (open_write and fd.name startswith "/lib/modules/"))
   output: >
-    Kernel module loading attempt from trading container 
+    Kernel module loading attempt from trading container
     (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [trading, kernel-module, security]
@@ -346,7 +346,7 @@
     not proc.name in (python, python3) and
     not container.name="ai-trading-bot"
   output: >
-    Unauthorized trading decision logged 
+    Unauthorized trading decision logged
     (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [trading, decision, unauthorized]
@@ -360,7 +360,7 @@
     not proc.name in (python, python3) and
     not proc.args contains "bot.main"
   output: >
-    Direct position file manipulation detected 
+    Direct position file manipulation detected
     (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [trading, position, manipulation]
@@ -376,7 +376,7 @@
      proc.args contains "force" or
      proc.args contains "bypass")
   output: >
-    Emergency stop bypass attempt 
+    Emergency stop bypass attempt
     (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: CRITICAL
   tags: [trading, emergency-stop, bypass]
@@ -395,7 +395,7 @@
      fd.name contains "/app/config/") and
     container.name in (ai-trading-bot, bluefin-service, dashboard-backend)
   output: >
-    Trading file access 
+    Trading file access
     (user=%user.name command=%proc.cmdline file=%fd.name access=%evt.type container=%container.name image=%container.image.repository)
   priority: INFORMATIONAL
   tags: [trading, audit, file-access]
@@ -407,7 +407,7 @@
     (inbound or outbound) and
     container.name in (ai-trading-bot, bluefin-service)
   output: >
-    Trading network activity 
+    Trading network activity
     (user=%user.name connection=%fd.rip:%fd.rport direction=%evt.type container=%container.name image=%container.image.repository)
   priority: INFORMATIONAL
   tags: [trading, audit, network]
@@ -425,7 +425,7 @@
     proc.name in (python, python3) and
     proc.args contains "bot.main"
   output: >
-    Trading bot startup detected 
+    Trading bot startup detected
     (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
   priority: INFORMATIONAL
   tags: [trading, startup, monitoring]
@@ -438,7 +438,7 @@
     proc.name in (python, python3) and
     evt.type=procexit
   output: >
-    Trading bot shutdown detected 
+    Trading bot shutdown detected
     (user=%user.name command=%proc.cmdline exit_code=%proc.exitcode container=%container.name image=%container.image.repository)
   priority: INFORMATIONAL
   tags: [trading, shutdown, monitoring]
