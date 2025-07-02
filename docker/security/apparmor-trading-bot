@@ -1,0 +1,158 @@
+#include <tunables/global>
+
+profile ai-trading-bot flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+  #include <abstractions/openssl>
+  #include <abstractions/ssl_certs>
+
+  # Allow network access for API calls
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+
+  # Python interpreter and libraries
+  /usr/bin/python3* ix,
+  /usr/local/bin/python* ix,
+  /opt/python*/bin/python* ix,
+
+  # Python site-packages (read-only)
+  /usr/lib/python3*/site-packages/** r,
+  /usr/local/lib/python3*/site-packages/** r,
+  /opt/python*/lib/python3*/site-packages/** r,
+
+  # Application code (read-only)
+  /app/** r,
+  /app/bot/** r,
+  /app/prompts/** r,
+  /app/config/** r,
+
+  # Application executable permissions
+  /app/bot/*.py rix,
+  /app/bot/**/*.py rix,
+
+  # Temporary files
+  /tmp/** rw,
+  /var/tmp/** rw,
+  owner /tmp/** rw,
+  owner /var/tmp/** rw,
+
+  # Process information
+  /proc/sys/kernel/random/uuid r,
+  /proc/cpuinfo r,
+  /proc/meminfo r,
+  /proc/stat r,
+  /proc/*/stat r,
+  /proc/*/status r,
+  /proc/*/cmdline r,
+  /proc/*/fd/ r,
+  owner /proc/*/fd/** r,
+
+  # System libraries
+  /lib/x86_64-linux-gnu/** r,
+  /usr/lib/x86_64-linux-gnu/** r,
+  /lib/** r,
+  /usr/lib/** r,
+
+  # SSL/TLS certificates
+  /etc/ssl/certs/** r,
+  /etc/ca-certificates/** r,
+  /usr/share/ca-certificates/** r,
+
+  # DNS resolution
+  /etc/hosts r,
+  /etc/host.conf r,
+  /etc/resolv.conf r,
+  /etc/nsswitch.conf r,
+  /etc/gai.conf r,
+
+  # Timezone data
+  /etc/localtime r,
+  /usr/share/zoneinfo/** r,
+
+  # Logs directory (write access)
+  owner /app/logs/** rw,
+  owner /app/logs/ rw,
+
+  # Data directory (write access for persistence)
+  owner /app/data/** rw,
+  owner /app/data/ rw,
+
+  # Docker secrets (read-only)
+  /run/secrets/* r,
+
+  # Deny access to sensitive areas
+  deny /etc/passwd* r,
+  deny /etc/shadow* r,
+  deny /etc/group* r,
+  deny /etc/sudoers* r,
+  deny /root/** rwx,
+  deny /home/** rwx,
+  deny /var/log/** w,
+  deny /sys/** w,
+  deny /boot/** rwx,
+
+  # Deny raw network access
+  deny network raw,
+  deny network packet,
+
+  # Deny capability usage except essential ones
+  deny capability dac_override,
+  deny capability dac_read_search,
+  deny capability fowner,
+  deny capability fsetid,
+  deny capability kill,
+  deny capability setgid,
+  deny capability setuid,
+  deny capability setpcap,
+  deny capability linux_immutable,
+  deny capability net_bind_service,
+  deny capability net_broadcast,
+  deny capability net_admin,
+  deny capability net_raw,
+  deny capability ipc_lock,
+  deny capability ipc_owner,
+  deny capability sys_module,
+  deny capability sys_rawio,
+  deny capability sys_chroot,
+  deny capability sys_ptrace,
+  deny capability sys_pacct,
+  deny capability sys_admin,
+  deny capability sys_boot,
+  deny capability sys_nice,
+  deny capability sys_resource,
+  deny capability sys_time,
+  deny capability sys_tty_config,
+  deny capability mknod,
+  deny capability lease,
+  deny capability audit_write,
+  deny capability audit_control,
+  deny capability setfcap,
+  deny capability mac_override,
+  deny capability mac_admin,
+
+  # Allow essential capabilities
+  capability chown,
+  capability sys_resource,
+
+  # Signal permissions (for graceful shutdown)
+  signal (send) peer=unconfined,
+  signal (receive) peer=unconfined,
+
+  # PTY access for logging
+  /dev/pts/* rw,
+  /dev/ptmx rw,
+
+  # Allow memory mapping for Python
+  /dev/zero rw,
+  /dev/null rw,
+  /dev/urandom r,
+  /dev/random r,
+
+  # Mount permissions (deny all)
+  deny mount,
+  deny umount,
+  deny pivot_root,
+}

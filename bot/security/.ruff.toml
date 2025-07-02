@@ -1,0 +1,15 @@
+# Ruff configuration for security module
+# These rules are disabled as they create false positives for security code
+
+[lint]
+ignore = [
+    "S110",    # try-except-pass is needed for optional security features
+    "TRY300",  # Return in try block is valid for security decorators
+    "TRY400",  # logger.error is appropriate for non-critical security failures
+    "TRY401",  # Exception in logging is needed for sanitization
+    "G004",    # f-strings in logging are safe after sanitization
+    "PTH123",  # open() is needed for Docker secrets compatibility
+    "PLW1641", # SecureString intentionally doesn't implement __hash__
+    "UP038",   # Union types not supported in all Python versions
+    "ARG002",  # Unused arguments are required for context manager protocol
+]
