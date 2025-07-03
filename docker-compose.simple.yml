@@ -14,8 +14,9 @@ services:
     environment:
       - SYSTEM__DRY_RUN=true
       - LOG_LEVEL=INFO
-      - EXCHANGE__EXCHANGE_TYPE=bluefin
-      - TRADING__SYMBOL=SUI-PERP
+      - EXCHANGE__EXCHANGE_TYPE=${EXCHANGE__EXCHANGE_TYPE:-coinbase}
+      - TRADING__SYMBOL=${TRADING__SYMBOL:-BTC-USD}
+      - BLUEFIN_PRIVATE_KEY=${EXCHANGE__BLUEFIN_PRIVATE_KEY:-dummy_key_for_testing}
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
@@ -45,6 +46,7 @@ services:
     environment:
       - BLUEFIN_SERVICE_API_KEY=${BLUEFIN_SERVICE_API_KEY:-secure-api-key}
       - EXCHANGE__BLUEFIN_NETWORK=${EXCHANGE__BLUEFIN_NETWORK:-testnet}
+      - BLUEFIN_PRIVATE_KEY=${EXCHANGE__BLUEFIN_PRIVATE_KEY:-dummy_key_for_testing}
     ports:
       - "8081:8080"
     restart: unless-stopped

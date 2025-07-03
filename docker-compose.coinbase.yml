@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # Core AI Trading Bot - Coinbase only configuration
+  ai-trading-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        USER_ID: "${HOST_UID:-1000}"
+        GROUP_ID: "${HOST_GID:-1000}"
+        EXCHANGE_TYPE: coinbase
+    container_name: ai-trading-bot
+    env_file: ".env"
+    environment:
+      # Core settings
+      - SYSTEM__DRY_RUN=true
+      - LOG_LEVEL=INFO
+      - EXCHANGE__EXCHANGE_TYPE=coinbase
+      - TRADING__SYMBOL=BTC-USD
+      - TRADING__INTERVAL=1m
+
+      # Coinbase API configuration (from .env)
+      - EXCHANGE__CDP_API_KEY_NAME=${EXCHANGE__CDP_API_KEY_NAME:-}
+      - EXCHANGE__CDP_PRIVATE_KEY=${EXCHANGE__CDP_PRIVATE_KEY:-}
+
+      # LLM configuration (from .env)
+      - LLM__OPENAI_API_KEY=${LLM__OPENAI_API_KEY:-}
+      - LLM__MODEL_NAME=${LLM__MODEL_NAME:-gpt-4}
+      - LLM__TEMPERATURE=${LLM__TEMPERATURE:-0.1}
+
+      # Disable Bluefin services
+      - BLUEFIN_ENABLED=false
+      - MCP_ENABLED=false
+
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./config:/app/config
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    networks:
+      - trading-network
+    healthcheck:
+      test: ["CMD", "/app/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  trading-network:
+    driver: bridge
+
+volumes:
+  trading-logs:
+  trading-data:
