@@ -69,7 +69,14 @@ SCALE_MULTIPLIER_BASE = 10  # Base for scale calculations
 ADDRESS_DISPLAY_MIN_LENGTH = 12  # Minimum address length for truncation
 
 # Add parent directory to path to import secure logging and utilities
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+# Use multiple approaches to ensure the path is correctly set in different environments
+parent_dir = str(Path(__file__).resolve().parent.parent)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+# Also add /app to path if we're in a Docker container
+if "/app" not in sys.path and os.path.exists("/app"):
+    sys.path.insert(0, "/app")
 
 
 class ErrorType(Enum):
@@ -217,6 +224,7 @@ class BluefinSDKService:
         self.private_key = os.getenv("BLUEFIN_PRIVATE_KEY")
         self.network = os.getenv("BLUEFIN_NETWORK", "mainnet")
         self.initialized = False
+        self.development_mode = False  # Flag to track if running in development mode
 
         # Request timeout settings
         self.quick_timeout = ClientTimeout(total=5.0)  # For health checks, tickers
@@ -1512,6 +1520,26 @@ class BluefinSDKService:
             BluefinConnectionError: If private key is invalid
         """
         if not self.private_key:
+            # Check for development/testing environment
+            is_development = (
+                os.environ.get("SYSTEM__ENVIRONMENT") in ["development", "testing"]
+                or os.environ.get("SYSTEM__DRY_RUN", "").lower() == "true"
+                or self.private_key == "dummy_key_for_testing"
+            )
+
+            if is_development:
+                logger.warning(
+                    "No valid BLUEFIN_PRIVATE_KEY set - using dummy key for development/testing",
+                    extra={
+                        "service_id": self.service_id,
+                        "mode": "development",
+                        "dry_run": os.environ.get("SYSTEM__DRY_RUN", "false"),
+                    },
+                )
+                # Set a valid dummy key that passes basic validation
+                self.private_key = "0123456789abcdef" * 4  # 64 character hex string
+                return
+
             error_msg = "BLUEFIN_PRIVATE_KEY environment variable not set"
             logger.error(
                 "Private key validation failed",
@@ -1525,6 +1553,23 @@ class BluefinSDKService:
 
         key_validation_errors = []
         original_key = self.private_key.strip()
+
+        # Handle dummy/testing keys specially
+        if original_key in [
+            "dummy_key_for_testing",
+            "dummy_key_for_testing_only_not_for_production",
+        ]:
+            logger.info(
+                "Using dummy key in development mode - Bluefin SDK will not be initialized",
+                extra={
+                    "service_id": self.service_id,
+                    "mode": "development",
+                    "key_type": "dummy",
+                },
+            )
+            self.development_mode = True
+            return
+
         words = original_key.split()
 
         if len(words) in [MIN_MNEMONIC_WORDS, MAX_MNEMONIC_WORDS]:
@@ -1699,6 +1744,18 @@ class BluefinSDKService:
         Raises:
             BluefinAPIError: If all initialization attempts fail
         """
+        # Skip client initialization in development mode
+        if self.development_mode:
+            logger.info(
+                "Skipping Bluefin client initialization in development mode",
+                extra={
+                    "service_id": self.service_id,
+                    "mode": "development",
+                    "reason": "dummy_key_detected",
+                },
+            )
+            return
+
         max_init_retries = 3
         init_retry_delay = 2.0
 
@@ -1823,6 +1880,22 @@ class BluefinSDKService:
 
         try:
             self._validate_private_key()
+
+            # In development mode, skip client initialization but mark as initialized
+            if self.development_mode:
+                self.initialized = True
+                logger.info(
+                    "Bluefin SDK service initialized in development mode (no client)",
+                    extra={
+                        "service_id": self.service_id,
+                        "network": self.network,
+                        "initialized": True,
+                        "mode": "development",
+                        "client_ready": False,
+                    },
+                )
+                return True
+
             network = self._resolve_network_config()
             await self._initialize_client_with_retry(network)
 
@@ -1932,6 +2005,30 @@ class BluefinSDKService:
                 },
             )
             return {"error": error_msg}
+
+        # Return mock data in development mode
+        if self.development_mode:
+            logger.info(
+                "Returning mock account data in development mode",
+                extra={
+                    "service_id": self.service_id,
+                    "mode": "development",
+                    "mock_data": True,
+                },
+            )
+            return {
+                "success": True,
+                "account_data": {
+                    "address": "0x1234567890abcdef",
+                    "balances": {
+                        "USDC": {"available": "1000.00", "locked": "0.00"},
+                        "SUI": {"available": "100.00", "locked": "0.00"},
+                    },
+                    "positions": [],
+                    "margin_ratio": "100.00",
+                    "mode": "development_mock",
+                },
+            }
 
         try:
             # Initialize default response

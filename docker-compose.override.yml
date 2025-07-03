@@ -23,9 +23,6 @@ services:
       mcp-omnisearch:
         condition: service_healthy
         required: false
-      bluefin-service:
-        condition: service_started
-        required: false
     healthcheck:
       test: ["CMD-SHELL", "/app/healthcheck.sh || exit 1"]
       interval: 45s
@@ -33,21 +30,12 @@ services:
       retries: 3
       start_period: 60s
 
-  # Bluefin Service - Enhanced reliability
+  # Bluefin Service - Disabled for Coinbase mode
   bluefin-service:
-    restart: unless-stopped
-    environment:
-      - BLUEFIN_SERVICE_RATE_LIMIT=50  # Conservative rate limiting
-      - CONNECTION_TIMEOUT=45
-      - READ_TIMEOUT=90
-      - RETRY_ATTEMPTS=3
-      - RETRY_BACKOFF=2
-    healthcheck:
-      test: ["CMD", "curl", "-f", "--connect-timeout", "10", "http://localhost:8080/health"]
-      interval: 45s
-      timeout: 15s
-      retries: 3
-      start_period: 30s
+    profiles:
+      - bluefin-only  # Only start when explicitly requested with --profile bluefin-only
+    restart: "no"
+    command: ["echo", "Bluefin service disabled - using Coinbase exchange"]
 
 
   # MCP OmniSearch - Enhanced reliability

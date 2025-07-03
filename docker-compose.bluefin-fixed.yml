@@ -1,0 +1,121 @@
+version: '3.8'
+
+services:
+  # Core AI Trading Bot - Bluefin DEX configuration
+  ai-trading-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        USER_ID: "${HOST_UID:-1000}"
+        GROUP_ID: "${HOST_GID:-1000}"
+        EXCHANGE_TYPE: bluefin
+    container_name: ai-trading-bot
+    env_file: ".env"
+    environment:
+      # Core settings
+      - SYSTEM__DRY_RUN=true
+      - SYSTEM__ENVIRONMENT=development
+      - LOG_LEVEL=INFO
+      - EXCHANGE__EXCHANGE_TYPE=bluefin
+      - TRADING__SYMBOL=SUI-PERP
+      - TRADING__INTERVAL=1m
+
+      # Bluefin configuration with fallbacks
+      - EXCHANGE__BLUEFIN_PRIVATE_KEY=${EXCHANGE__BLUEFIN_PRIVATE_KEY:-dummy_key_for_testing}
+      - EXCHANGE__BLUEFIN_NETWORK=${EXCHANGE__BLUEFIN_NETWORK:-testnet}
+      - BLUEFIN_SERVICE_URL=http://bluefin-service:8080
+      - BLUEFIN_SERVICE_API_KEY=${BLUEFIN_SERVICE_API_KEY:-secure-api-key}
+
+      # LLM configuration (from .env)
+      - LLM__OPENAI_API_KEY=${LLM__OPENAI_API_KEY:-}
+      - LLM__MODEL_NAME=${LLM__MODEL_NAME:-gpt-4}
+      - LLM__TEMPERATURE=${LLM__TEMPERATURE:-0.1}
+
+      # Enable Bluefin services
+      - BLUEFIN_ENABLED=true
+      - MCP_ENABLED=false
+
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./config:/app/config
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    networks:
+      - trading-network
+    depends_on:
+      bluefin-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/app/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Fixed Bluefin Service with better error handling
+  bluefin-service:
+    build:
+      context: ./services
+      dockerfile: Dockerfile.bluefin
+      args:
+        USER_ID: "${HOST_UID:-1000}"
+        GROUP_ID: "${HOST_GID:-1000}"
+    container_name: bluefin-service
+    env_file: ".env"
+    environment:
+      # Development mode settings
+      - SYSTEM__DRY_RUN=true
+      - SYSTEM__ENVIRONMENT=development
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONWARNINGS=ignore::SyntaxWarning,ignore::UserWarning
+
+      # Bluefin configuration with graceful fallbacks
+      - BLUEFIN_PRIVATE_KEY=${EXCHANGE__BLUEFIN_PRIVATE_KEY:-dummy_key_for_testing}
+      - BLUEFIN_NETWORK=${EXCHANGE__BLUEFIN_NETWORK:-testnet}
+      - EXCHANGE__BLUEFIN_NETWORK=${EXCHANGE__BLUEFIN_NETWORK:-testnet}
+      - BLUEFIN_SERVICE_API_KEY=${BLUEFIN_SERVICE_API_KEY:-secure-api-key}
+      - BLUEFIN_SERVICE_RATE_LIMIT=${BLUEFIN_SERVICE_RATE_LIMIT:-50}
+
+      # Service configuration
+      - HOST=0.0.0.0
+      - PORT=8080
+      - LOG_LEVEL=info
+
+    ports:
+      - "8081:8080"
+    restart: unless-stopped
+    networks:
+      trading-network:
+        aliases:
+          - bluefin-service
+          - bluefin
+    volumes:
+      - ./logs/bluefin:/app/logs
+      - ./data/bluefin:/app/data
+      - ./tmp/bluefin:/app/tmp
+    healthcheck:
+      test: ["CMD", "curl", "-f", "--connect-timeout", "5", "--max-time", "10", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+
+networks:
+  trading-network:
+    driver: bridge
+
+volumes:
+  trading-logs:
+  trading-data:
