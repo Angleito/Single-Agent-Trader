@@ -9,6 +9,7 @@ All configuration now uses functional programming types with proper validation.
 import json
 import os
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 
@@ -146,6 +147,127 @@ class ConfigError(Exception):
 
 class ConfigValidationError(Exception):
     """Configuration validation error."""
+
+
+class StartupValidator:
+    """Comprehensive startup validation for the trading bot."""
+
+    def __init__(self, settings: Settings):
+        """Initialize startup validator with settings."""
+        self.settings = settings
+        self.validation_results: dict[str, list[str]] = {
+            "environment_vars": [],
+            "api_connectivity": [],
+            "configuration": [],
+            "system_dependencies": [],
+            "file_permissions": [],
+            "warnings": [],
+            "errors": [],
+            "critical_errors": [],
+        }
+
+    def validate_environment_variables(self) -> list[str]:
+        """Validate all required environment variables are present."""
+        issues = []
+
+        # LLM provider specific validation
+        if self.settings.llm.provider == "openai":
+            if not self.settings.llm.openai_api_key:
+                issues.append("OpenAI API key is required when using OpenAI provider")
+        elif self.settings.llm.provider == "anthropic":
+            if not self.settings.llm.anthropic_api_key:
+                issues.append("Anthropic API key is required when using Anthropic provider")
+        elif self.settings.llm.provider == "ollama" and not self.settings.llm.ollama_base_url:
+            issues.append("Ollama base URL is required when using Ollama provider")
+
+        # Exchange credentials validation (for live trading)
+        if not self.settings.system.dry_run:
+            if self.settings.exchange.exchange_type == "coinbase":
+                if not self.settings.exchange.cdp_api_key_name:
+                    issues.append("Coinbase CDP API key is required for live trading")
+                if not self.settings.exchange.cdp_private_key:
+                    issues.append("Coinbase CDP private key is required for live trading")
+            elif self.settings.exchange.exchange_type == "bluefin":
+                if not self.settings.exchange.bluefin_private_key:
+                    issues.append("Bluefin private key is required for live trading")
+
+        # Critical system settings
+        if self.settings.system.environment == Environment.PRODUCTION:
+            if self.settings.system.dry_run:
+                issues.append("Production environment should not use dry run mode")
+
+        self.validation_results["environment_vars"] = issues
+        return issues
+
+    def validate_configuration_integrity(self) -> list[str]:
+        """Validate configuration parameter integrity and consistency."""
+        issues = []
+
+        # Trading parameter validation
+        if self.settings.trading.leverage > 20:
+            issues.append("Leverage above 20x is extremely risky")
+
+        if self.settings.trading.max_size_pct > 50:
+            issues.append("Position size above 50% is extremely risky")
+
+        # Risk management validation
+        if self.settings.risk.default_stop_loss_pct >= self.settings.risk.default_take_profit_pct:
+            issues.append("Stop loss should be smaller than take profit for positive risk/reward")
+
+        if self.settings.risk.max_concurrent_trades > 20:
+            issues.append("Too many concurrent trades may lead to overexposure")
+
+        # Data configuration validation
+        if self.settings.data.candle_limit < 50:
+            issues.append("Candle limit below 50 may not provide enough data for analysis")
+
+        if self.settings.data.candle_limit > 1000:
+            issues.append("Candle limit above 1000 may impact performance")
+
+        self.validation_results["configuration"] = issues
+        return issues
+
+    def run_comprehensive_validation(self) -> dict[str, Any]:
+        """Run all validation checks and return comprehensive results."""
+        # Run validation checks
+        env_issues = self.validate_environment_variables()
+        config_issues = self.validate_configuration_integrity()
+
+        # Categorize issues by severity
+        critical_issues = []
+        warning_issues = []
+
+        for issue in env_issues:
+            if any(keyword in issue.lower() for keyword in ["required", "failed", "cannot"]):
+                critical_issues.append(issue)
+            else:
+                warning_issues.append(issue)
+
+        # Configuration issues are typically warnings unless critical
+        for issue in config_issues:
+            if any(keyword in issue.lower() for keyword in ["extremely risky"]):
+                critical_issues.append(issue)
+            else:
+                warning_issues.append(issue)
+
+        # Build final results
+        results = {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "valid": len(critical_issues) == 0,
+            "critical_errors": critical_issues,
+            "warnings": warning_issues,
+            "details": self.validation_results,
+            "configuration_summary": {
+                "environment": self.settings.system.environment.value,
+                "dry_run": self.settings.system.dry_run,
+                "profile": getattr(self.settings, 'profile', TradingProfile.BALANCED).value,
+                "llm_provider": self.settings.llm.provider,
+                "trading_symbol": self.settings.trading.symbol,
+                "leverage": self.settings.trading.leverage,
+            },
+        }
+
+        return results
 
 
 # Compatibility adapters using functional programming types
@@ -1010,12 +1132,27 @@ class Settings:
 
         # Store functional config for advanced use cases
         self._functional_config = functional_config
+        
+        # Set default profile
+        self.profile = TradingProfile.BALANCED
 
-    def apply_profile(self, profile: str) -> "Settings":
+    def apply_profile(self, profile: str | TradingProfile) -> "Settings":
         """Apply a configuration profile using functional composition."""
+        # Convert string to TradingProfile enum if needed
+        if isinstance(profile, str):
+            try:
+                profile_enum = TradingProfile(profile.lower())
+            except ValueError:
+                # Fallback to balanced if invalid profile
+                profile_enum = TradingProfile.BALANCED
+        else:
+            profile_enum = profile
+            
         # Load profile-specific overrides and create new Settings instance
-        profile_overrides = self._load_profile_overrides(profile)
-        return Settings(self._functional_config, **profile_overrides)
+        profile_overrides = self._load_profile_overrides(profile_enum.value)
+        new_settings = Settings(self._functional_config, **profile_overrides)
+        new_settings.profile = profile_enum
+        return new_settings
 
     def _load_profile_overrides(self, profile: str) -> dict[str, Any]:
         """Load profile-specific configuration overrides."""
@@ -1190,6 +1327,17 @@ def _create_functional_config_from_dict(config_data: dict[str, Any]) -> Any:
 
     except Exception:
         return None
+
+
+def save_settings_to_file(settings: Settings, file_path: str | Path) -> None:
+    """Save settings to a configuration file."""
+    file_path = Path(file_path)
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    config_data = settings.to_dict()
+    
+    with open(file_path, 'w') as f:
+        json.dump(config_data, f, indent=2, default=str)
 
 
 def validate_settings(settings: Settings) -> str | None:
@@ -1440,10 +1588,11 @@ def get_config_template() -> dict[str, Any]:
     }
 
 
-# Add missing load_from_file method to Settings class for compatibility
+# Add missing load_from_file and save_to_file methods to Settings class for compatibility
 Settings.load_from_file = classmethod(
     lambda _cls, file_path: load_settings_from_file(file_path)
 )
+Settings.save_to_file = lambda self, file_path: save_settings_to_file(self, file_path)
 
 
 # Export all the classes and functions that the current interface provides
@@ -1452,6 +1601,7 @@ __all__ = [
     "ConfigValidationError",
     "DataSettings",
     "DominanceSettings",
+    "Environment",
     "ExchangeSettings",
     "LLMSettings",
     "MCPSettings",
@@ -1461,13 +1611,16 @@ __all__ = [
     "PaperTradingSettings",
     "RiskSettings",
     "Settings",
+    "StartupValidator",
     "SystemSettings",
+    "TradingProfile",
     "TradingSettings",
     "create_settings",
     "get_config",
     "get_config_template",
     "get_functional_config",
     "load_settings_from_file",
+    "save_settings_to_file",
     "settings",
     "validate_settings",
 ]

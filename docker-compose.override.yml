@@ -1,59 +1,158 @@
-# Docker Compose Override for Enhanced Service Management
-# This file provides safer defaults and better service orchestration
+# Docker Compose Override for Local Development
+# This file provides safe defaults and enhanced development features
+#
+# USAGE (automatically loaded):
+# docker-compose up
+#
+# To use specific exchange:
+# EXCHANGE__EXCHANGE_TYPE=coinbase docker-compose up
+# EXCHANGE__EXCHANGE_TYPE=bluefin docker-compose up
+#
+# This file is automatically loaded by docker-compose and overrides settings in docker-compose.yml
 
 services:
-  # AI Trading Bot - Enhanced with better error handling
+  # AI Trading Bot - Development Configuration
   ai-trading-bot:
     restart: unless-stopped
+    
+    # Development environment with safety defaults
     environment:
-      # Force paper trading mode for safety
+      # SAFETY FIRST - Force paper trading in development
       - SYSTEM__DRY_RUN=true
       - SYSTEM__ENVIRONMENT=development
-      # Enhanced service discovery with fallbacks
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      
+      # Development-friendly settings
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - DEBUG=${DEBUG:-false}
+      
+      # Exchange switching support (set via EXCHANGE__EXCHANGE_TYPE env var)
+      - EXCHANGE__EXCHANGE_TYPE=${EXCHANGE__EXCHANGE_TYPE:-coinbase}
+      
+      # Coinbase configuration (when EXCHANGE__EXCHANGE_TYPE=coinbase)
+      - EXCHANGE__CB_SANDBOX=${EXCHANGE__CB_SANDBOX:-true}
+      - TRADING__SYMBOL=${TRADING__SYMBOL:-BTC-USD}
+      
+      # Bluefin configuration (when EXCHANGE__EXCHANGE_TYPE=bluefin)  
+      - BLUEFIN_ENABLED=${BLUEFIN_ENABLED:-false}
+      - EXCHANGE__BLUEFIN_NETWORK=${EXCHANGE__BLUEFIN_NETWORK:-testnet}
+      - BLUEFIN_USE_REAL_DATA=${BLUEFIN_USE_REAL_DATA:-true}
       - BLUEFIN_SERVICE_URL=http://bluefin-service:8080
       - BLUEFIN_SERVICE_FALLBACK_URL=http://localhost:8081
+      
+      # Service URLs with fallbacks
       - OMNISEARCH__SERVER_URL=http://mcp-omnisearch:8767
+      - OMNISEARCH__ENABLED=${OMNISEARCH__ENABLED:-true}
+      
       # MCP Memory disabled - backend removed
       - MCP_ENABLED=false
-      # Enhanced WebSocket resilience
+      
+      # Enhanced debugging for development
       - SYSTEM__WEBSOCKET_MAX_RETRIES=10
       - SYSTEM__WEBSOCKET_RETRY_DELAY=3
       - SYSTEM__WEBSOCKET_TIMEOUT=30
+      
+      # FP Runtime - Development mode
+      - FP_RUNTIME_ENABLED=${FP_RUNTIME_ENABLED:-true}
+      - FP_RUNTIME_MODE=${FP_RUNTIME_MODE:-hybrid}
+      - FP_DEBUG_MODE=${FP_DEBUG_MODE:-false}
+      - FP_INTERPRETER_STATS=${FP_INTERPRETER_STATS:-false}
+      
+      # LLM Logging for development
+      - LLM__ENABLE_COMPLETION_LOGGING=${LLM__ENABLE_COMPLETION_LOGGING:-true}
+      - LLM__COMPLETION_LOG_LEVEL=${LLM__COMPLETION_LOG_LEVEL:-INFO}
+      - LLM__ENABLE_PERFORMANCE_TRACKING=${LLM__ENABLE_PERFORMANCE_TRACKING:-true}
+      
+    # Development ports (expose for debugging)
+    ports:
+      - "127.0.0.1:9091:9091"  # Metrics port for development
+      
+    # More lenient health check for development
+    healthcheck:
+      test: ["CMD-SHELL", "/app/healthcheck.sh || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 45s
+      
+    # Development resource limits (more generous)
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+    
+    # Optional dependencies for development flexibility
     depends_on:
       mcp-omnisearch:
         condition: service_healthy
         required: false
-    healthcheck:
-      test: ["CMD-SHELL", "/app/healthcheck.sh || exit 1"]
-      interval: 45s
-      timeout: 20s
-      retries: 3
-      start_period: 60s
 
-  # Bluefin Service - Disabled for Coinbase mode
+  # Bluefin Service - Conditional startup based on exchange type
   bluefin-service:
+    # Only start when using Bluefin exchange
     profiles:
-      - bluefin-only  # Only start when explicitly requested with --profile bluefin-only
-    restart: "no"
-    command: ["echo", "Bluefin service disabled - using Coinbase exchange"]
-
-
-  # MCP OmniSearch - Enhanced reliability
-  mcp-omnisearch:
+      - bluefin
     restart: unless-stopped
+    
+    # Development environment
     environment:
-      - MCP_SERVER_PORT=8767
-      - NODE_ENV=production
-      - LOG_LEVEL=INFO
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DEBUG=${DEBUG:-false}
+      - BLUEFIN_NETWORK=${EXCHANGE__BLUEFIN_NETWORK:-testnet}
+      - BLUEFIN_PRIVATE_KEY=${EXCHANGE__BLUEFIN_PRIVATE_KEY:-0x0000000000000000000000000000000000000000000000000000000000000000}
+      - BLUEFIN_SERVICE_API_KEY=${BLUEFIN_SERVICE_API_KEY:-secure-api-key-dev}
+    
+    # Expose port for debugging in development
+    ports:
+      - "127.0.0.1:8081:8080"
+      
+    # More lenient health check
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "--timeout=5", "http://localhost:8767/health"]
+      test: ["CMD", "curl", "-f", "--connect-timeout", "10", "--max-time", "15", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 20s
 
+  # MCP OmniSearch - Enhanced for development
+  mcp-omnisearch:
+    restart: unless-stopped
+    
+    # Development environment
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MCP_SERVER_PORT=8767
+      - DEBUG=${DEBUG:-false}
+      
+    # Expose port for development
+    ports:
+      - "127.0.0.1:8767:8767"
+      
+    # Development health check
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "--timeout=5", "http://localhost:8767/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+      
+    # Development resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.25'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
 
-# Enhanced network configuration
+# Development network configuration
 networks:
   trading-network:
     driver: bridge
@@ -63,3 +162,10 @@ networks:
       config:
         - subnet: 172.20.0.0/16
           gateway: 172.20.0.1
+
+# Helper aliases for development
+# To enable Bluefin exchange:
+# docker-compose --profile bluefin up
+#
+# Or set environment variable:
+# EXCHANGE__EXCHANGE_TYPE=bluefin docker-compose --profile bluefin up
