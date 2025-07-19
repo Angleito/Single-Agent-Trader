@@ -167,7 +167,7 @@ services:
   stress-test-runner:
     build:
       context: .
-      dockerfile: Dockerfile.stress-test
+      dockerfile: docker/Dockerfile.stress-test
     image: stress-test-runner:latest
     container_name: stress-test-runner
     depends_on:

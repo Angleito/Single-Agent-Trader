@@ -118,7 +118,7 @@ build_optimized_images() {
         --build-arg PYTHON_VERSION=3.12 \
         --build-arg MEMORY_LIMIT=$MEMORY_LIMIT_BOT \
         -t ai-trading-bot:slim \
-        -f Dockerfile.slim .
+        -f docker/Dockerfile.slim .
 
     print_success "Built optimized ai-trading-bot:slim"
 

@@ -119,7 +119,7 @@ poetry run pytest tests/unit/test_indicators.py
 ### Docker Permissions Setup (IMPORTANT - Run First!)
 ```bash
 # Fix Docker volume permission issues (run once)
-./setup-docker-permissions.sh
+./scripts/setup-docker-permissions.sh
 
 # This script:
 # - Creates required directories (logs/, data/, etc.)
@@ -137,7 +137,7 @@ sudo chown -R 1000:1000 ./logs ./data ./tmp
 #### Docker Setup with Configuration Validation
 ```bash
 # FIRST TIME: Set up permissions (prevents permission errors)
-./setup-docker-permissions.sh
+./scripts/setup-docker-permissions.sh
 
 # Validate configuration before starting Docker
 python -c "from bot.fp.types.config import Config; result = Config.from_env(); print('✅ Config valid' if result.is_success() else f'❌ Config error: {result.failure()}')"

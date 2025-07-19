@@ -1,133 +1,213 @@
 #!/bin/bash
-# AI Trading Bot Docker Startup Script
-# Handles proper network creation and service orchestration
+
+# Start Trading Bot Script for Low-Memory Systems
+# Optimized for 1GB DigitalOcean droplets
 
 set -e
 
 # Colors for output
-RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+RED='\033[0;31m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Function to print colored output
-print_status() {
-    case $1 in
-        "SUCCESS") echo -e "${GREEN}✅ $2${NC}" ;;
-        "ERROR") echo -e "${RED}❌ $2${NC}" ;;
-        "WARNING") echo -e "${YELLOW}⚠️  $2${NC}" ;;
-        "INFO") echo -e "${BLUE}ℹ️  $2${NC}" ;;
-    esac
+log() {
+    echo -e "${BLUE}[$(date +'%H:%M:%S')]${NC} $1"
 }
 
-# Print header
-echo "🚀 AI Trading Bot Startup"
-echo "========================="
+success() {
+    echo -e "${GREEN}✅${NC} $1"
+}
 
-# Configuration
-EXCHANGE_TYPE=${EXCHANGE_TYPE:-coinbase}
-COMPOSE_FILE=""
+warning() {
+    echo -e "${YELLOW}⚠️${NC} $1"
+}
 
-# Check if volume permissions are set up correctly
-if [ ! -d "./logs" ] || [ ! -d "./data" ]; then
-    print_status "INFO" "Setting up volume permissions..."
-    if [ -x "./scripts/setup-permissions.sh" ]; then
-        if ./scripts/setup-permissions.sh 2>/dev/null; then
-            print_status "SUCCESS" "Volume permissions set up"
-        else
-            print_status "WARNING" "Permission setup may require sudo. Run: sudo ./scripts/setup-permissions.sh"
-        fi
+error() {
+    echo -e "${RED}❌${NC} $1"
+}
+
+# Check if we're in the right directory
+if [ ! -f "docker-compose.yml" ]; then
+    error "docker-compose.yml not found. Please run from project root."
+    exit 1
+fi
+
+# Check if .env exists
+if [ ! -f ".env" ]; then
+    warning ".env file not found. Creating from .env.example..."
+    if [ -f ".env.example" ]; then
+        cp .env.example .env
+        warning "Please edit .env with your API keys before starting:"
+        echo "  nano .env"
+        exit 1
     else
-        print_status "WARNING" "Volume directories don't exist. Run: ./scripts/setup-permissions.sh"
+        error ".env.example not found. Cannot create .env file."
+        exit 1
     fi
 fi
 
-case $EXCHANGE_TYPE in
-    "coinbase")
-        COMPOSE_FILE="docker-compose.yml"
-        print_status "INFO" "Starting Coinbase configuration"
+# Add swap if system has less than 2GB RAM and no swap
+add_swap_if_needed() {
+    local total_mem=$(free -m | awk 'NR==2{print $2}')
+    local swap_mem=$(free -m | awk 'NR==3{print $2}')
+
+    if [ "$total_mem" -lt 2048 ] && [ "$swap_mem" -eq 0 ]; then
+        log "Low memory detected (${total_mem}MB). Adding 2GB swap..."
+
+        # Check if swap file already exists
+        if [ ! -f /swapfile ]; then
+            sudo fallocate -l 2G /swapfile
+            sudo chmod 600 /swapfile
+            sudo mkswap /swapfile
+        fi
+
+        # Enable swap
+        sudo swapon /swapfile 2>/dev/null || true
+
+        # Make permanent if not already in fstab
+        if ! grep -q '/swapfile' /etc/fstab; then
+            echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+        fi
+
+        success "Swap added successfully"
+        free -h
+    fi
+}
+
+# Choose deployment mode based on available memory
+choose_deployment_mode() {
+    local total_mem=$(free -m | awk 'NR==2{print $2}')
+
+    echo ""
+    log "Available deployment modes:"
+    echo "  1) Essential only (ai-trading-bot + bluefin-service) - 512MB RAM"
+    echo "  2) Core services (+ dashboard-backend) - 768MB RAM"
+    echo "  3) Full services (+ dashboard-frontend + MCP) - 1GB+ RAM"
+    echo ""
+
+    if [ "$total_mem" -lt 1024 ]; then
+        warning "Low memory detected (${total_mem}MB). Recommending Essential mode."
+        echo "1" > /tmp/deployment_mode
+    else
+        log "System memory: ${total_mem}MB"
+        read -p "Choose deployment mode (1-3): " -r deployment_mode
+        echo "$deployment_mode" > /tmp/deployment_mode
+    fi
+}
+
+# Start services based on deployment mode
+start_services() {
+    local mode=$(cat /tmp/deployment_mode 2>/dev/null || echo "2")
+
+    case $mode in
+        1)
+            log "Starting Essential services..."
+            docker compose up -d ai-trading-bot bluefin-service
+            ;;
+        2)
+            log "Starting Core services..."
+            docker compose up -d ai-trading-bot bluefin-service dashboard-backend
+            ;;
+        3)
+            log "Starting Full services..."
+            docker compose --profile full up -d
+            ;;
+        *)
+            log "Starting Core services (default)..."
+            docker compose up -d ai-trading-bot bluefin-service dashboard-backend
+            ;;
+    esac
+}
+
+# Main execution
+main() {
+    log "🚀 Starting AI Trading Bot deployment..."
+
+    # Add swap if needed
+    add_swap_if_needed
+
+    # Choose deployment mode
+    choose_deployment_mode
+
+    # Use sequential build script if available
+    if [ -f "scripts/sequential-docker-build.sh" ]; then
+        log "Using sequential build process..."
+        ./scripts/sequential-docker-build.sh --no-start
+    else
+        log "Building services..."
+        # Build with limited parallelism
+        docker compose build --parallel 1
+    fi
+
+    # Start services
+    start_services
+
+    # Show status
+    echo ""
+    success "Services started successfully!"
+
+    log "Service status:"
+    docker compose ps
+
+    echo ""
+    log "Useful commands:"
+    echo "  View logs:     docker compose logs -f"
+    echo "  Stop services: docker compose down"
+    echo "  Restart:       docker compose restart"
+    echo "  Update:        git pull && ./start-trading-bot.sh"
+
+    # Show access URLs
+    echo ""
+    log "Access URLs:"
+    if docker compose ps | grep -q dashboard-backend; then
+        echo "  Dashboard API: http://$(hostname -I | awk '{print $1}'):8000"
+    fi
+    if docker compose ps | grep -q dashboard-frontend; then
+        echo "  Web Dashboard: http://$(hostname -I | awk '{print $1}'):3000"
+    fi
+
+    # Show logs for main service
+    echo ""
+    log "Following AI Trading Bot logs (Ctrl+C to exit):"
+    docker compose logs -f ai-trading-bot
+}
+
+# Handle interruption
+trap 'log "Deployment interrupted"; exit 1' INT TERM
+
+# Parse arguments
+case "${1:-}" in
+    --help|-h)
+        echo "AI Trading Bot Startup Script"
+        echo ""
+        echo "Usage: $0 [options]"
+        echo ""
+        echo "Options:"
+        echo "  --help, -h     Show this help"
+        echo "  --essential    Start only essential services"
+        echo "  --core         Start core services (default)"
+        echo "  --full         Start all services"
+        echo "  --rebuild      Rebuild all containers"
+        echo ""
+        exit 0
         ;;
-    "bluefin")
-        COMPOSE_FILE="docker-compose.bluefin.yml"
-        print_status "INFO" "Starting Bluefin configuration"
+    --essential)
+        echo "1" > /tmp/deployment_mode
         ;;
-    *)
-        print_status "ERROR" "Invalid exchange type: $EXCHANGE_TYPE. Use 'coinbase' or 'bluefin'"
-        exit 1
+    --core)
+        echo "2" > /tmp/deployment_mode
+        ;;
+    --full)
+        echo "3" > /tmp/deployment_mode
+        ;;
+    --rebuild)
+        log "Rebuilding all containers..."
+        docker compose down --volumes
+        docker system prune -f
         ;;
 esac
 
-# Check if Docker is running
-if ! docker info >/dev/null 2>&1; then
-    print_status "ERROR" "Docker is not running. Please start Docker and try again."
-    exit 1
-fi
-print_status "SUCCESS" "Docker is running"
-
-# Create trading-network if it doesn't exist
-if ! docker network ls | grep -q "trading-network"; then
-    print_status "INFO" "Creating trading-network..."
-    docker network create \
-        --driver bridge \
-        --subnet 172.21.0.0/16 \
-        --gateway 172.21.0.1 \
-        --opt com.docker.network.bridge.name=tr0 \
-        --opt com.docker.network.bridge.enable_icc=true \
-        --opt com.docker.network.bridge.enable_ip_masquerade=true \
-        trading-network
-    print_status "SUCCESS" "trading-network created"
-else
-    print_status "SUCCESS" "trading-network already exists"
-fi
-
-# Stop any existing services
-print_status "INFO" "Stopping any existing services..."
-docker-compose -f docker-compose.yml down --remove-orphans 2>/dev/null || true
-if [ "$EXCHANGE_TYPE" = "bluefin" ]; then
-    docker-compose -f docker-compose.bluefin.yml down --remove-orphans 2>/dev/null || true
-fi
-
-# Build and start services
-print_status "INFO" "Building and starting services with $COMPOSE_FILE..."
-
-if [ "$EXCHANGE_TYPE" = "bluefin" ]; then
-    # For Bluefin, we need to ensure the main network exists and start bluefin services
-    print_status "INFO" "Starting Bluefin services..."
-    docker-compose -f docker-compose.bluefin.yml up -d --build
-else
-    # For Coinbase, use the main compose file
-    print_status "INFO" "Starting Coinbase services..."
-    docker-compose -f docker-compose.yml up -d --build
-fi
-
-# Wait for services to be healthy
-print_status "INFO" "Waiting for services to be healthy..."
-sleep 10
-
-# Run network validation
-print_status "INFO" "Running network validation..."
-if [ -x "./scripts/validate-docker-network.sh" ]; then
-    ./scripts/validate-docker-network.sh
-else
-    print_status "WARNING" "Network validation script not found or not executable"
-fi
-
-# Show running services
-echo ""
-print_status "SUCCESS" "Services started successfully!"
-echo ""
-echo "📊 Running Services:"
-docker ps --filter "network=trading-network" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-
-echo ""
-echo "📋 Useful Commands:"
-echo "=================="
-echo "• View logs: docker-compose -f $COMPOSE_FILE logs -f [service-name]"
-echo "• Stop services: docker-compose -f $COMPOSE_FILE down"
-echo "• Restart service: docker-compose -f $COMPOSE_FILE restart [service-name]"
-echo "• Execute command: docker exec -it [container-name] [command]"
-echo "• Network info: docker network inspect trading-network"
-
-echo ""
-print_status "SUCCESS" "Startup complete! 🎉"
+# Run main function
+main
