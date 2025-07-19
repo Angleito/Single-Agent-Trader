@@ -1,11 +1,12 @@
 # AI Trading Bot
 
-An AI-powered crypto trading bot for Coinbase with VuManChu Cipher indicators and LangChain-powered decision making.
+An AI-powered crypto trading bot supporting both Coinbase (CEX) and Bluefin (DEX) with VuManChu Cipher indicators and LangChain-powered decision making.
 
 **Perfect for macOS with OrbStack** - Simple Docker setup, no Kubernetes complexity.
 
 ## Features
 
+- **Multi-Exchange Support**: Trade on Coinbase (CEX) or Bluefin (DEX on Sui blockchain)
 - **AI-Powered Decisions**: Uses OpenAI GPT models for intelligent trading decisions
 - **VuManChu Cipher Indicators**: Custom technical indicators implemented in Python
 - **Stablecoin Dominance Analysis**: Real-time USDT/USDC dominance tracking for market sentiment
@@ -13,14 +14,36 @@ An AI-powered crypto trading bot for Coinbase with VuManChu Cipher indicators an
   - Adjusts position sizes based on dominance levels
   - Integrated into both LLM and fallback trading logic
 - **Risk Management**: Built-in position sizing, stop-loss, and take-profit mechanisms
-- **Real-time Data**: Live market data via Coinbase WebSocket and REST APIs
+- **Real-time Data**: Live market data via WebSocket and REST APIs
 - **Backtesting**: Historical strategy testing capabilities
 - **Paper Trading Mode**: Test strategies safely without real money (single toggle control)
 - **Memory & Learning**: MCP-powered experience tracking for continuous improvement
+- **Functional Programming**: Enhanced security with opaque types and Result-based error handling
 
 ## 📊 Trading Features
 
-### Spot Trading Support
+### Exchange Options
+
+#### Coinbase (Centralized Exchange)
+- **Spot Trading**: Full support with volume-based fee tiers
+- **Futures Trading**: Perpetual contracts available
+- **Regulated**: KYC required, USD on/off ramps
+- **High Liquidity**: Deep order books
+
+#### Bluefin (Decentralized Exchange on Sui)
+- **Perpetual Futures Only**: BTC-PERP, ETH-PERP, SOL-PERP, SUI-PERP
+- **Non-Custodial**: You control your private keys
+- **Low Fees**: ~0.05% trading fees, <$0.01 gas fees
+- **High Performance**: 30ms transaction finality
+- **Up to 100x Leverage**: Use with caution
+
+### Exchange Selection
+```bash
+# In your .env file - Choose your exchange
+EXCHANGE_TYPE=coinbase  # or "bluefin" for DEX trading
+```
+
+### Spot Trading Support (Coinbase)
 - **Optimized for Coinbase Spot Markets**: Full support for spot trading with accurate fee calculations
 - **Volume-Based Fee Tiers**: Automatically detects your 30-day trading volume and applies correct fees
 - **Fee-Adjusted Position Sizing**: Positions are automatically sized to account for trading fees
@@ -36,18 +59,15 @@ An AI-powered crypto trading bot for Coinbase with VuManChu Cipher indicators an
 - **VIP Tier** ($75M+): 0.02% maker, 0.05% taker
 - **VIP Ultra** ($250M+): 0.00% maker, 0.05% taker
 
-### Spot Trading Configuration
-To use spot trading mode:
+### Futures Trading Configuration
 ```bash
-# In your .env file
-TRADING__ENABLE_FUTURES=false  # Enable spot trading mode
-TRADING__SYMBOL=ETH-USD       # Spot trading pair
-```
+# For Coinbase futures
+TRADING__ENABLE_FUTURES=true
+TRADING__SYMBOL=BTC-USD
 
-Use the optimized spot trading config:
-```bash
-# Copy spot trading configuration
-cp config/spot_trading_config.json config/development.json
+# For Bluefin (always futures)
+EXCHANGE_TYPE=bluefin
+TRADING_PAIRS=BTC-PERP,ETH-PERP  # Bluefin format
 ```
 
 ## Quick Start (3 Steps)
@@ -68,17 +88,24 @@ cp .env.example .env
 Edit `.env` with your credentials:
 
 ```bash
-# Required: Coinbase API credentials
+# Choose your exchange (pick one)
+EXCHANGE_TYPE=coinbase  # or "bluefin"
+
+# For Coinbase (CEX)
 COINBASE_API_KEY=your_coinbase_api_key_here
-COINBASE_API_SECRET=your_coinbase_api_secret_here
-COINBASE_PASSPHRASE=your_coinbase_passphrase_here
+COINBASE_PRIVATE_KEY=your_coinbase_private_key_here
+
+# For Bluefin (DEX)
+BLUEFIN_PRIVATE_KEY=your_sui_wallet_private_key_here
+BLUEFIN_NETWORK=mainnet  # or "testnet"
 
 # Required: OpenAI API key
-OPENAI_API_KEY=your_openai_api_key_here
+LLM_OPENAI_API_KEY=your_openai_api_key_here
 ```
 
 **Get your API keys:**
 - **Coinbase**: [Advanced Trade API](https://www.coinbase.com/cloud/api-keys)
+- **Bluefin**: Export private key from your [Sui Wallet](https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil)
 - **OpenAI**: [Platform API Keys](https://platform.openai.com/api-keys)
 
 ### 3. Start Trading
@@ -137,6 +164,73 @@ TAKE_PROFIT_ENABLED=true   # Enable take profits
 ```
 
 **Note:** The `SYSTEM__DRY_RUN` variable is the single master toggle for paper trading. When set to `true`, all trading operations are simulated. There are no additional CLI flags or settings needed - this one variable controls everything.
+
+## 🌊 Bluefin DEX Integration
+
+### What is Bluefin?
+
+Bluefin is a high-performance decentralized perpetual futures exchange built on the Sui blockchain, offering:
+
+- **Non-Custodial Trading**: You control your private keys - no exchange holds your funds
+- **Lightning Fast**: 30ms transaction finality on Sui blockchain
+- **Ultra-Low Fees**: ~0.05% trading fees + minimal gas (<$0.01)
+- **High Leverage**: Up to 100x leverage (use responsibly!)
+- **No KYC**: Trade without identity verification
+- **Perpetual Futures**: BTC-PERP, ETH-PERP, SOL-PERP, SUI-PERP
+
+### Quick Setup for Bluefin
+
+1. **Get a Sui Wallet**
+   - Install [Sui Wallet](https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil)
+   - Create wallet and save recovery phrase
+   - Export your private key
+
+2. **Fund Your Wallet**
+   - Get SUI tokens for gas (need ~1 SUI)
+   - Transfer USDC to your Sui wallet (your trading capital)
+   - Use [Wormhole Bridge](https://wormhole.com/) to bridge from other chains
+
+3. **Configure the Bot**
+   ```bash
+   # In your .env file
+   EXCHANGE_TYPE=bluefin
+   BLUEFIN_PRIVATE_KEY=your_sui_private_key_here
+   BLUEFIN_NETWORK=mainnet  # or testnet for testing
+   TRADING_PAIRS=ETH-PERP,BTC-PERP  # Bluefin uses -PERP format
+   ```
+
+4. **Start Trading**
+   ```bash
+   # Paper trading on Bluefin (recommended first)
+   TRADING_MODE=paper docker-compose up
+   
+   # Live trading (real money!)
+   TRADING_MODE=live docker-compose up
+   ```
+
+### Bluefin vs Coinbase
+
+| Feature | Coinbase (CEX) | Bluefin (DEX) |
+|---------|----------------|---------------|
+| **Custody** | Exchange holds funds | You hold funds |
+| **KYC Required** | Yes | No |
+| **Trading Fees** | 0.05-0.6% | ~0.05% |
+| **Settlement** | Instant | ~550ms on-chain |
+| **Leverage** | Up to 10x | Up to 100x |
+| **Markets** | Spot & Futures | Futures only |
+| **Liquidity** | Very High | Growing |
+| **Security** | Regulated, insured | Smart contract risk |
+
+### Enhanced Security Features
+
+The bot includes enhanced security for Bluefin:
+
+- **Opaque Private Keys**: Keys are automatically masked in all logs
+- **Result-Based Validation**: Clear error messages for configuration issues
+- **Rate Limiting**: Built-in protection against API abuse
+- **Type-Safe Configuration**: Prevents common setup mistakes
+
+See [docs/bluefin_integration.md](docs/bluefin_integration.md) for detailed setup instructions.
 
 ## Memory & Learning System (MCP)
 
@@ -333,12 +427,13 @@ data/                    # Market data (auto-created)
 ## Architecture
 
 **Simple & Clean:**
-- **Data Layer**: Real-time Coinbase market data
+- **Data Layer**: Real-time market data from Coinbase or Bluefin
 - **AI Engine**: OpenAI GPT-powered trading decisions with memory enhancement
 - **Memory System**: MCP server for experience tracking and learning
 - **Risk Manager**: Position sizing and loss protection
-- **Exchange**: Coinbase order execution
+- **Exchange Layer**: Multi-exchange support (Coinbase CEX & Bluefin DEX)
 - **Validator**: JSON schema validation with fallback to HOLD
+- **Functional Programming**: Type-safe configuration with Result-based error handling
 
 ## Contributing
 
