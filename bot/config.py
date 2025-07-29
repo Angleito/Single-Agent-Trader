@@ -152,7 +152,7 @@ class ConfigValidationError(Exception):
 class StartupValidator:
     """Comprehensive startup validation for the trading bot."""
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: "Settings"):
         """Initialize startup validator with settings."""
         self.settings = settings
         self.validation_results: dict[str, list[str]] = {
@@ -192,7 +192,7 @@ class StartupValidator:
                     issues.append("Bluefin private key is required for live trading")
 
         # Critical system settings
-        if self.settings.system.environment == Environment.PRODUCTION:
+        if self.settings.system.environment.lower() == "production":
             if self.settings.system.dry_run:
                 issues.append("Production environment should not use dry run mode")
 
@@ -258,7 +258,7 @@ class StartupValidator:
             "warnings": warning_issues,
             "details": self.validation_results,
             "configuration_summary": {
-                "environment": self.settings.system.environment.value,
+                "environment": self.settings.system.environment,
                 "dry_run": self.settings.system.dry_run,
                 "profile": getattr(self.settings, 'profile', TradingProfile.BALANCED).value,
                 "llm_provider": self.settings.llm.provider,
@@ -343,6 +343,10 @@ class TradingSettings:
                 "TRADING__MAX_FUTURES_LEVERAGE",
                 kwargs.get("max_futures_leverage", 20),
             )
+            self.use_fifo_accounting: bool = parse_bool_env(
+                "TRADING__USE_FIFO_ACCOUNTING",
+                kwargs.get("use_fifo_accounting", True)
+            )
 
     def _from_functional_config(self, _config: Any) -> None:
         """Extract settings from functional configuration."""
@@ -364,6 +368,7 @@ class TradingSettings:
         self.futures_account_type = "CFM"
         self.auto_cash_transfer = True
         self.max_futures_leverage = 20
+        self.use_fifo_accounting = True
 
 
 @dataclass
@@ -394,11 +399,19 @@ class LLMSettings:
                 "LLM__MAX_RETRIES", kwargs.get("max_retries", 3)
             )
             self.openai_api_key: SecretStr | None = None
+            self.anthropic_api_key: SecretStr | None = None
+            self.ollama_base_url: str | None = None
 
             # Load from environment
             api_key = os.getenv("LLM__OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
             if api_key:
                 self.openai_api_key = SecretStr(api_key)
+            
+            anthropic_key = os.getenv("LLM__ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
+            if anthropic_key:
+                self.anthropic_api_key = SecretStr(anthropic_key)
+                
+            self.ollama_base_url = os.getenv("LLM__OLLAMA_BASE_URL")
 
     def _from_functional_config(self, config: Any) -> None:
         """Extract settings from functional configuration."""
@@ -412,11 +425,19 @@ class LLMSettings:
             self.request_timeout = 30
             self.max_retries = 3
             self.openai_api_key = None
+            self.anthropic_api_key = None
+            self.ollama_base_url = None
 
             # Load API key from environment
             api_key = os.getenv("LLM__OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
             if api_key:
                 self.openai_api_key = SecretStr(api_key)
+                
+            anthropic_key = os.getenv("LLM__ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
+            if anthropic_key:
+                self.anthropic_api_key = SecretStr(anthropic_key)
+                
+            self.ollama_base_url = os.getenv("LLM__OLLAMA_BASE_URL")
         else:
             # Set defaults for non-LLM strategies
             self.provider = "openai"
@@ -426,6 +447,8 @@ class LLMSettings:
             self.request_timeout = 30
             self.max_retries = 3
             self.openai_api_key = None
+            self.anthropic_api_key = None
+            self.ollama_base_url = None
 
 
 @dataclass
@@ -598,22 +621,16 @@ class ExchangeSettings:
 
             # Check if bech32 format and attempt automatic conversion
             if private_key_str.startswith("suiprivkey"):
-                # Try to automatically convert the bech32 key
+                # Try to automatically convert the bech32 key using inline implementation
                 try:
-                    from bot.utils.sui_key_converter import (
-                        bech32_to_hex,
-                    )
-
-                    print(
-                        "🔄 Bech32 format detected, attempting automatic conversion..."
-                    )
-                    converted_key = bech32_to_hex(private_key_str)
+                    print("🔄 Bech32 format detected, attempting automatic conversion...")
+                    converted_key = self._inline_bech32_to_hex(private_key_str)
                     if converted_key:
                         print("✅ Successfully converted bech32 to hex format")
                         return SecureString(converted_key)
                     print("❌ Automatic conversion failed")
-                except ImportError:
-                    print("⚠️ Converter utility not available")
+                except Exception as e:
+                    print(f"⚠️ Conversion error: {e}")
 
                 # If conversion failed, provide manual instructions
                 raise ValueError(
@@ -661,6 +678,76 @@ class ExchangeSettings:
                 "• Bech32: suiprivkey... (Sui wallet export format)\n"
                 "• Mnemonic: 12 or 24 word seed phrase"
             ) from None
+
+    def _inline_bech32_to_hex(self, bech32_key: str) -> str | None:
+        """
+        Inline bech32 to hex conversion to avoid circular imports.
+        
+        Args:
+            bech32_key: Private key in bech32 format
+            
+        Returns:
+            Hex private key string or None if conversion fails
+        """
+        try:
+            if not bech32_key.startswith("suiprivkey1"):
+                return None
+
+            # Remove the 'suiprivkey1' prefix
+            data_part = bech32_key[11:]  # Remove 'suiprivkey1' prefix
+            
+            # Bech32 alphabet
+            BECH32_ALPHABET = "023456789acdefghjklmnpqrstuvwxyz"
+            
+            # Convert bech32 chars to 5-bit values
+            data = []
+            for char in data_part.lower():
+                if char in BECH32_ALPHABET:
+                    data.append(BECH32_ALPHABET.index(char))
+                else:
+                    return None
+            
+            # Convert from 5-bit to 8-bit bytes
+            # Skip checksum validation for simplicity (last 6 chars are checksum)
+            if len(data) < 6:  # Need at least checksum
+                return None
+                
+            # Remove checksum (last 6 characters for bech32)
+            payload = data[:-6]
+            
+            # Convert 5-bit groups to bytes
+            bits = 0
+            value = 0
+            result = []
+            
+            for item in payload:
+                value = (value << 5) | item
+                bits += 5
+                
+                if bits >= 8:
+                    result.append((value >> (bits - 8)) & 0xff)
+                    bits -= 8
+            
+            # Handle remaining bits
+            if bits > 0:
+                result.append((value << (8 - bits)) & 0xff)
+            
+            # The result should be around 32 bytes for a private key
+            if len(result) >= 32:
+                # Take first 32 bytes and convert to hex
+                private_key_bytes = bytes(result[:32])
+                hex_key = private_key_bytes.hex()
+                return f"0x{hex_key}"
+            elif len(result) >= 31:
+                # Pad to 32 bytes if we have 31
+                padded_bytes = bytes(result) + b'\x00' * (32 - len(result))
+                hex_key = padded_bytes.hex()
+                return f"0x{hex_key}"
+            
+            return None
+            
+        except Exception:
+            return None
 
 
 @dataclass
@@ -801,6 +888,13 @@ class SystemSettings:
                     kwargs.get("log_backup_count", 5),
                 )
             )
+            self.log_format: str = kwargs.get("log_format") or os.getenv(
+                "SYSTEM__LOG_FORMAT", "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+            )
+            self.enable_websocket_publishing: bool = parse_bool_env(
+                "SYSTEM__ENABLE_WEBSOCKET_PUBLISHING",
+                kwargs.get("enable_websocket_publishing", False)
+            )
 
     def _from_functional_config(self, config: "SystemConfig") -> None:
         """Extract settings from functional configuration."""
@@ -817,6 +911,8 @@ class SystemSettings:
         self.log_file_path = "logs/bot.log"  # Default
         self.max_log_size_mb = 100  # Default
         self.log_backup_count = 5  # Default
+        self.log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"  # Default
+        self.enable_websocket_publishing = False  # Default
 
 
 @dataclass
@@ -1040,6 +1136,42 @@ class OrderbookSettings:
 
 
 @dataclass
+class MarketMakingSettings:
+    """Market making settings using functional types."""
+
+    def __init__(self, **kwargs):
+        # Maintain exact compatibility with environment variable loading
+        self.enabled: bool = parse_bool_env(
+            "MARKET_MAKING__ENABLED", kwargs.get("enabled", False)
+        )
+        self.spread_bps: int = parse_int_env(
+            "MARKET_MAKING__SPREAD_BPS", kwargs.get("spread_bps", 10)
+        )
+        self.position_size_pct: float = parse_float_env(
+            "MARKET_MAKING__POSITION_SIZE_PCT", kwargs.get("position_size_pct", 1.0)
+        )
+        self.max_orders_per_side: int = parse_int_env(
+            "MARKET_MAKING__MAX_ORDERS_PER_SIDE", kwargs.get("max_orders_per_side", 5)
+        )
+        self.order_refresh_interval_seconds: int = parse_int_env(
+            "MARKET_MAKING__ORDER_REFRESH_INTERVAL_SECONDS",
+            kwargs.get("order_refresh_interval_seconds", 30)
+        )
+        self.min_profit_bps: int = parse_int_env(
+            "MARKET_MAKING__MIN_PROFIT_BPS", kwargs.get("min_profit_bps", 5)
+        )
+        self.max_position_size: float = parse_float_env(
+            "MARKET_MAKING__MAX_POSITION_SIZE", kwargs.get("max_position_size", 1000.0)
+        )
+        self.inventory_target_pct: float = parse_float_env(
+            "MARKET_MAKING__INVENTORY_TARGET_PCT", kwargs.get("inventory_target_pct", 50.0)
+        )
+        self.skew_factor: float = parse_float_env(
+            "MARKET_MAKING__SKEW_FACTOR", kwargs.get("skew_factor", 0.1)
+        )
+
+
+@dataclass
 class OmniSearchSettings:
     """OmniSearch integration settings using functional types."""
 
@@ -1112,6 +1244,7 @@ class Settings:
             )
             self.mcp = MCPSettings(functional_config.system, **overrides.get("mcp", {}))
             self.orderbook = OrderbookSettings(**overrides.get("orderbook", {}))
+            self.market_making = MarketMakingSettings(**overrides.get("market_making", {}))
             self.omnisearch = OmniSearchSettings(**overrides.get("omnisearch", {}))
         else:
             # Fallback to environment/kwargs based initialization
@@ -1128,6 +1261,7 @@ class Settings:
             self.monitoring = MonitoringSettings(**overrides.get("monitoring", {}))
             self.mcp = MCPSettings(**overrides.get("mcp", {}))
             self.orderbook = OrderbookSettings(**overrides.get("orderbook", {}))
+            self.market_making = MarketMakingSettings(**overrides.get("market_making", {}))
             self.omnisearch = OmniSearchSettings(**overrides.get("omnisearch", {}))
 
         # Store functional config for advanced use cases
@@ -1175,6 +1309,12 @@ class Settings:
         }
         return profile_configs.get(profile, {})
 
+    def validate_trading_environment(self) -> list[str]:
+        """Validate trading environment configuration and return warnings."""
+        validator = StartupValidator(self)
+        results = validator.run_comprehensive_validation()
+        return results.get("warnings", [])
+
     def to_dict(self) -> dict[str, Any]:
         """Convert settings to dictionary."""
         return {
@@ -1189,6 +1329,7 @@ class Settings:
             "monitoring": self.monitoring.__dict__,
             "mcp": self.mcp.__dict__,
             "orderbook": self.orderbook.__dict__,
+            "market_making": self.market_making.__dict__,
             "omnisearch": self.omnisearch.__dict__,
         }
 
@@ -1604,6 +1745,7 @@ __all__ = [
     "Environment",
     "ExchangeSettings",
     "LLMSettings",
+    "MarketMakingSettings",
     "MCPSettings",
     "MonitoringSettings",
     "OmniSearchSettings",

@@ -1443,7 +1443,7 @@ class TradingEngine:
         # List of paths to try in order of preference with container awareness
         temp_dir = Path(tempfile.gettempdir())
         fallback_paths = [
-            self.settings.system.log_file_path,  # Original path
+            Path(self.settings.system.log_file_path),  # Original path
             temp_dir / "bot.log",  # Container fallback using secure temp dir
             self._get_container_safe_home()
             / "bot.log",  # Container-aware home fallback
