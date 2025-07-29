@@ -5054,7 +5054,8 @@ def live(
         ai-trading-bot live --no-dry-run --force
     """
     # Delegate to functional CLI if available, otherwise fallback to original implementation
-    if _functional_cli is not None:
+    # TEMPORARY: Force legacy implementation until functional CLI is complete
+    if False and _functional_cli is not None:
         try:
             exit_code = _functional_cli.execute_live_command(
                 dry_run=dry_run,
