@@ -75,17 +75,55 @@ def bech32_to_hex(bech32_key: str) -> str | None:
 
         return private_key_hex
     except ImportError:
-        # If pysui is not available, try basic bech32 decoding
+        # Enhanced bech32 decoding without pysui dependency
         try:
-            # This is a simplified approach - proper bech32 decoding is more complex
-            # The suiprivkey format includes a prefix and checksum
-            if not bech32_key.startswith("suiprivkey"):
+            if not bech32_key.startswith("suiprivkey1"):
                 return None
 
-            # Remove the prefix (this is simplified - real bech32 is more complex)
-            # In reality, we'd need proper bech32 decoding library
-            # For now, return None to indicate manual conversion is needed
+            # Remove the 'suiprivkey1' prefix
+            data_part = bech32_key[11:]  # Remove 'suiprivkey1' prefix
+            
+            # Bech32 alphabet
+            BECH32_ALPHABET = "023456789acdefghjklmnpqrstuvwxyz"
+            
+            # Convert bech32 chars to 5-bit values
+            data = []
+            for char in data_part.lower():
+                if char in BECH32_ALPHABET:
+                    data.append(BECH32_ALPHABET.index(char))
+                else:
+                    return None
+            
+            # Convert from 5-bit to 8-bit bytes
+            # Skip checksum validation for simplicity (last 8 chars are checksum)
+            if len(data) < 8:  # Need at least checksum
+                return None
+                
+            # Remove checksum (last 8 characters)
+            payload = data[:-8]
+            
+            # Convert 5-bit groups to bytes
+            bits = 0
+            value = 0
+            result = []
+            
+            for item in payload:
+                value = (value << 5) | item
+                bits += 5
+                
+                if bits >= 8:
+                    result.append((value >> (bits - 8)) & 0xff)
+                    bits -= 8
+            
+            # The result should be 32 bytes for a private key
+            if len(result) >= 32:
+                # Take first 32 bytes and convert to hex
+                private_key_bytes = bytes(result[:32])
+                hex_key = private_key_bytes.hex()
+                return f"0x{hex_key}"
+            
             return None
+            
         except Exception:
             return None
 

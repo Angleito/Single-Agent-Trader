@@ -498,6 +498,9 @@ class ExchangeSettings:
             self.websocket_timeout: int = parse_int_env(
                 "EXCHANGE__WEBSOCKET_TIMEOUT", kwargs.get("websocket_timeout", 30)
             )
+            self.use_trade_aggregation: bool = parse_bool_env(
+                "EXCHANGE__USE_TRADE_AGGREGATION", kwargs.get("use_trade_aggregation", True)
+            )
 
             # Load credentials from environment
             if os.getenv("EXCHANGE__CB_API_KEY"):
@@ -533,6 +536,11 @@ class ExchangeSettings:
             self.rate_limit_requests = config.rate_limits.requests_per_minute
             self.rate_limit_window_seconds = 60
             self.bluefin_network = "mainnet"
+            
+            # Add missing attributes with defaults
+            self.websocket_reconnect_attempts = 5
+            self.websocket_timeout = 30
+            self.use_trade_aggregation = True
 
             # Convert functional types to compatibility types
             self.cdp_api_key_name = (
@@ -550,6 +558,11 @@ class ExchangeSettings:
             self.rate_limit_requests = config.rate_limits.requests_per_minute
             self.rate_limit_window_seconds = 60
             self.bluefin_network = config.network
+            
+            # Add missing attributes with defaults
+            self.websocket_reconnect_attempts = 5
+            self.websocket_timeout = 30
+            self.use_trade_aggregation = True
 
             # Convert functional types
             self.bluefin_private_key = (
@@ -572,6 +585,11 @@ class ExchangeSettings:
             self.rate_limit_requests = 10
             self.rate_limit_window_seconds = 60
             self.bluefin_network = "mainnet"
+            
+            # Add missing attributes with defaults
+            self.websocket_reconnect_attempts = 5
+            self.websocket_timeout = 30
+            self.use_trade_aggregation = True
 
         # Set defaults for missing credentials
         self.cb_api_key = self.cb_api_key or None
@@ -818,6 +836,9 @@ class DominanceSettings:
         )
         self.threshold: float = parse_float_env(
             "DOMINANCE__THRESHOLD", kwargs.get("threshold", 0.45)
+        )
+        self.enable_dominance_data: bool = parse_bool_env(
+            "DOMINANCE__ENABLE_DOMINANCE_DATA", kwargs.get("enable_dominance_data", False)
         )
 
 

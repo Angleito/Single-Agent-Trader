@@ -100,12 +100,20 @@ class ExchangeFactory:
         # Extract Bluefin-specific parameters
         private_key = kwargs.get("private_key")
         if not private_key:
-            # Get from settings and extract string value if SecretStr
+            # Get from settings and extract string value if SecretStr or SecureString
             private_key_setting = getattr(
                 settings.exchange, "bluefin_private_key", None
             )
-            if private_key_setting:
-                private_key = private_key_setting.get_secret_value()
+            if private_key_setting is not None:
+                if hasattr(private_key_setting, 'get_secret_value'):
+                    # Pydantic SecretStr
+                    private_key = private_key_setting.get_secret_value()
+                elif hasattr(private_key_setting, 'get_value'):
+                    # SecureString
+                    private_key = private_key_setting.get_value()
+                else:
+                    # Fallback to string conversion
+                    private_key = str(private_key_setting)
             else:
                 private_key = None
 

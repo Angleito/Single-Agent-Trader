@@ -220,8 +220,17 @@ class BluefinClient(BaseExchange):
             # If passed directly as a parameter, use it
             self.private_key: str | None = private_key
         elif settings.exchange.bluefin_private_key:
-            # Extract from SecretStr settings
-            self.private_key = settings.exchange.bluefin_private_key.get_secret_value()
+            # Extract from SecretStr or SecureString settings
+            private_key_setting = settings.exchange.bluefin_private_key
+            if hasattr(private_key_setting, 'get_secret_value'):
+                # Pydantic SecretStr
+                self.private_key = private_key_setting.get_secret_value()
+            elif hasattr(private_key_setting, 'get_value'):
+                # SecureString
+                self.private_key = private_key_setting.get_value()
+            else:
+                # Fallback to string conversion
+                self.private_key = str(private_key_setting)
         else:
             self.private_key = None
 

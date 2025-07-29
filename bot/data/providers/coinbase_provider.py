@@ -17,6 +17,21 @@ from bot.trading_types import MarketData
 logger = logging.getLogger(__name__)
 
 
+def _extract_secret_value(secret_obj) -> str | None:
+    """Safely extract secret value from SecretStr or SecureString objects."""
+    if secret_obj is None:
+        return None
+    if hasattr(secret_obj, 'get_secret_value'):
+        # Pydantic SecretStr
+        return secret_obj.get_secret_value()
+    elif hasattr(secret_obj, 'get_value'):
+        # SecureString
+        return secret_obj.get_value()
+    else:
+        # Fallback to string conversion
+        return str(secret_obj)
+
+
 class MarketDataAPIError(Exception):
     """Raised when market data API requests fail."""
 
@@ -483,12 +498,12 @@ class CoinbaseMarketDataProvider(AbstractMarketDataProvider):
 
             # Extract actual values from SecretStr objects
             cdp_api_key = (
-                cdp_api_key_obj.get_secret_value()
+                _extract_secret_value(cdp_api_key_obj)
                 if hasattr(cdp_api_key_obj, "get_secret_value")
                 else str(cdp_api_key_obj)
             )
             cdp_private_key = (
-                cdp_private_key_obj.get_secret_value()
+                _extract_secret_value(cdp_private_key_obj)
                 if hasattr(cdp_private_key_obj, "get_secret_value")
                 else str(cdp_private_key_obj)
             )
@@ -588,9 +603,9 @@ class CoinbaseMarketDataProvider(AbstractMarketDataProvider):
             and settings.exchange.cb_passphrase
         ):
             self._rest_client = CoinbaseAdvancedTrader(
-                api_key=settings.exchange.cb_api_key.get_secret_value(),
-                api_secret=settings.exchange.cb_api_secret.get_secret_value(),
-                passphrase=settings.exchange.cb_passphrase.get_secret_value(),
+                api_key=_extract_secret_value(settings.exchange.cb_api_key),
+                api_secret=_extract_secret_value(settings.exchange.cb_api_secret),
+                passphrase=_extract_secret_value(settings.exchange.cb_passphrase),
                 sandbox=settings.exchange.cb_sandbox,
             )
             logger.info("Initialized REST client with legacy Coinbase credentials")
@@ -600,8 +615,8 @@ class CoinbaseMarketDataProvider(AbstractMarketDataProvider):
             and settings.exchange.cdp_private_key
         ):
             self._rest_client = CoinbaseAdvancedTrader(
-                api_key=settings.exchange.cdp_api_key_name.get_secret_value(),
-                api_secret=settings.exchange.cdp_private_key.get_secret_value(),
+                api_key=_extract_secret_value(settings.exchange.cdp_api_key_name),
+                api_secret=_extract_secret_value(settings.exchange.cdp_private_key),
             )
             logger.info("Initialized REST client with CDP Coinbase credentials")
         else:

@@ -150,6 +150,16 @@ class SecureString:  # noqa: PLW1641
 
         return result == 0
 
+    def __bool__(self) -> bool:
+        """Return True if the SecureString contains data."""
+        return hasattr(self, "_data") and self._data and len(self._data) > 0
+
+    def __len__(self) -> int:
+        """Return the length of the stored data."""
+        if not hasattr(self, "_data") or not self._data:
+            return 0
+        return self._length
+
     def __del__(self):
         """Securely clean up the sensitive data."""
         try:

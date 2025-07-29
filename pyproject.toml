@@ -25,7 +25,7 @@ ai-trading-bot = "bot.main:cli"
 
 [tool.poetry]
 packages = [{include = "bot"}]
-package-mode = false
+# package-mode = false  # Commented out for uv compatibility
 
 [tool.poetry.dependencies]
 python = ">=3.12,<3.14"

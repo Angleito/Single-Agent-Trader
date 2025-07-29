@@ -15,6 +15,21 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Literal, cast
 
+
+def _extract_secret_value(secret_obj) -> str | None:
+    """Safely extract secret value from SecretStr or SecureString objects."""
+    if secret_obj is None:
+        return None
+    if hasattr(secret_obj, 'get_secret_value'):
+        # Pydantic SecretStr
+        return secret_obj.get_secret_value()
+    elif hasattr(secret_obj, 'get_value'):
+        # SecureString
+        return secret_obj.get_value()
+    else:
+        # Fallback to string conversion
+        return str(secret_obj)
+
 try:
     # Prefer the new official SDK import path first
     from coinbase.rest import RESTClient as _BaseClient
@@ -707,20 +722,20 @@ class CoinbaseClient(BaseExchange):
         settings_legacy = all(
             [
                 settings.exchange.cb_api_key
-                and settings.exchange.cb_api_key.get_secret_value().strip(),
+                and _extract_secret_value(settings.exchange.cb_api_key).strip(),
                 settings.exchange.cb_api_secret
-                and settings.exchange.cb_api_secret.get_secret_value().strip(),
+                and _extract_secret_value(settings.exchange.cb_api_secret).strip(),
                 settings.exchange.cb_passphrase
-                and settings.exchange.cb_passphrase.get_secret_value().strip(),
+                and _extract_secret_value(settings.exchange.cb_passphrase).strip(),
             ]
         )
 
         settings_cdp = all(
             [
                 settings.exchange.cdp_api_key_name
-                and settings.exchange.cdp_api_key_name.get_secret_value().strip(),
+                and _extract_secret_value(settings.exchange.cdp_api_key_name).strip(),
                 settings.exchange.cdp_private_key
-                and settings.exchange.cdp_private_key.get_secret_value().strip(),
+                and _extract_secret_value(settings.exchange.cdp_private_key).strip(),
             ]
         )
 
@@ -729,17 +744,17 @@ class CoinbaseClient(BaseExchange):
             # Use legacy authentication
             self.auth_method = "legacy"
             self.api_key = api_key or (
-                settings.exchange.cb_api_key.get_secret_value()
+                _extract_secret_value(settings.exchange.cb_api_key)
                 if settings.exchange.cb_api_key
                 else None
             )
             self.api_secret = api_secret or (
-                settings.exchange.cb_api_secret.get_secret_value()
+                _extract_secret_value(settings.exchange.cb_api_secret)
                 if settings.exchange.cb_api_secret
                 else None
             )
             self.passphrase = passphrase or (
-                settings.exchange.cb_passphrase.get_secret_value()
+                _extract_secret_value(settings.exchange.cb_passphrase)
                 if settings.exchange.cb_passphrase
                 else None
             )
@@ -753,12 +768,12 @@ class CoinbaseClient(BaseExchange):
             self.api_secret = None
             self.passphrase = None
             self.cdp_api_key_name = cdp_api_key_name or (
-                settings.exchange.cdp_api_key_name.get_secret_value()
+                _extract_secret_value(settings.exchange.cdp_api_key_name)
                 if settings.exchange.cdp_api_key_name
                 else None
             )
             self.cdp_private_key = cdp_private_key or (
-                settings.exchange.cdp_private_key.get_secret_value()
+                _extract_secret_value(settings.exchange.cdp_private_key)
                 if settings.exchange.cdp_private_key
                 else None
             )
