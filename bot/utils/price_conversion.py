@@ -19,7 +19,6 @@ try:
         PriceContext,
         batch_convert_market_data,
         convert_price_optimized,
-        get_precision_manager,
     )
     from .precision_manager import format_price_for_display as _format_price_for_display
 

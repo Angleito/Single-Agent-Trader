@@ -1,6 +1,5 @@
 """Configuration management utilities for backup and restore operations."""
 
-import json
 import logging
 import tempfile
 from datetime import UTC, datetime
@@ -67,7 +66,11 @@ class ConfigManager:
 
         # Development configuration
         dev_overrides = {
-            "system": {"environment": Environment.DEVELOPMENT, "dry_run": True, "log_level": "DEBUG"},
+            "system": {
+                "environment": Environment.DEVELOPMENT,
+                "dry_run": True,
+                "log_level": "DEBUG",
+            },
             "exchange": {"cb_sandbox": True},
             "trading": {"leverage": 2},
             "risk": {"max_daily_loss_pct": 2.0},
@@ -79,7 +82,11 @@ class ConfigManager:
 
         # Staging configuration
         staging_overrides = {
-            "system": {"environment": Environment.STAGING, "dry_run": True, "log_level": "INFO"},
+            "system": {
+                "environment": Environment.STAGING,
+                "dry_run": True,
+                "log_level": "INFO",
+            },
             "exchange": {"cb_sandbox": True},
             "trading": {"leverage": 5},
             "risk": {"max_daily_loss_pct": 3.0},
@@ -91,7 +98,11 @@ class ConfigManager:
 
         # Production configuration template
         prod_overrides = {
-            "system": {"environment": Environment.PRODUCTION, "dry_run": False, "log_level": "INFO"},
+            "system": {
+                "environment": Environment.PRODUCTION,
+                "dry_run": False,
+                "log_level": "INFO",
+            },
             "exchange": {"cb_sandbox": False},
             "trading": {"leverage": 3},
             "risk": {"max_daily_loss_pct": 5.0},

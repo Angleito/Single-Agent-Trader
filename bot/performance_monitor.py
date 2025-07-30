@@ -1042,7 +1042,9 @@ class PerformanceMonitor:
                 else (
                     "good"
                     if health_score >= 75
-                    else "fair" if health_score >= 60 else "poor"
+                    else "fair"
+                    if health_score >= 60
+                    else "poor"
                 )
             ),
         }

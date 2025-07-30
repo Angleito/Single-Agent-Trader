@@ -138,7 +138,7 @@ def some[T](value: T) -> Option[T]:
     return Some(value)
 
 
-def empty() -> Option[T]:
+def empty[T]() -> Option[T]:
     """Create an Empty Option."""
     return Empty()
 
@@ -170,7 +170,7 @@ def sequence_option[T](options: list[Option[T]]) -> Option[list[T]]:
     return Some(results)
 
 
-def traverse_option(items: list[T], func: Callable[[T], Option[U]]) -> Option[list[U]]:
+def traverse_option[T, U](items: list[T], func: Callable[[T], Option[U]]) -> Option[list[U]]:
     """Apply function to each item and sequence results."""
     return sequence_option([func(item) for item in items])
 
@@ -183,9 +183,9 @@ def first_some[T](options: list[Option[T]]) -> Option[T]:
     return Empty()
 
 
-def combine_options(
-    option1: Option[T], option2: Option[U], combiner: Callable[[T, U], "V"]
-) -> "Option[V]":
+def combine_options[T, U, V](
+    option1: Option[T], option2: Option[U], combiner: Callable[[T, U], V]
+) -> Option[V]:
     """Combine two options using a combiner function."""
     if option1.is_some() and option2.is_some():
         value1 = cast("Some[T]", option1).value

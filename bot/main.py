@@ -12,7 +12,8 @@ warnings.resetwarnings()
 try:
     current_module = sys.modules[__name__]
     if not hasattr(current_module, "__warningregistry__"):
-        current_module.__warningregistry__ = {}
+        # Type: ignore because __warningregistry__ is a dynamic attribute
+        current_module.__warningregistry__ = {}  # type: ignore[attr-defined]
 except (AttributeError, TypeError):
     # Some modules don't support setting attributes
     # This is fine, warnings will still be filtered
@@ -88,11 +89,17 @@ import signal
 import tempfile
 import time
 from asyncio import Task
+from collections.abc import Callable
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    cast,
+)
 
 # Third-party imports with error handling
 try:
@@ -179,6 +186,7 @@ except ImportError as e:
 # Essential trading components
 try:
     from .exchange.factory import ExchangeFactory
+    from .fp.adapters.trading_type_adapter import TradingTypeAdapter
     from .paper_trading import PaperTradingAccount
     from .position_manager import PositionManager
     from .risk import RiskManager
@@ -188,10 +196,33 @@ except ImportError as e:
 
 # Memory optimization
 try:
-    from .memory_optimizer import get_memory_optimizer, monitor_memory_usage
+    from .memory_optimizer import (
+        MemoryOptimizer,
+        get_memory_optimizer,
+    )
+
+    # Type alias for the actual function
+    _get_memory_optimizer: Callable[[], MemoryOptimizer] | None = (
+        get_memory_optimizer
+    )
 except ImportError:
     console.print("⚠️  Memory optimizer not available", style="yellow")
-    get_memory_optimizer = None
+
+    class _DummyMemoryOptimizer:
+        """Dummy memory optimizer for when the real one is not available."""
+
+        def get_memory_report(self) -> dict[str, Any]:
+            return {"status": "disabled", "reason": "memory_optimizer not available"}
+
+        def optimize_memory(self) -> None:
+            pass
+
+    def _dummy_get_memory_optimizer() -> _DummyMemoryOptimizer:
+        return _DummyMemoryOptimizer()
+
+    _get_memory_optimizer = cast(
+        Callable[[], Any] | None, _dummy_get_memory_optimizer
+    )
     monitor_memory_usage = lambda func: func  # No-op decorator
 
 # Market data providers - Using functional data layer
@@ -340,13 +371,13 @@ class TradingEngine:
         self._shutdown_requested = False
         self._memory_available = False  # Initialize early to prevent AttributeError
         self._last_position_log_time: datetime | None = None
-        self._background_tasks: list[asyncio.Task[Any]] = (
-            []
-        )  # Track background tasks for cleanup
+        self._background_tasks: list[
+            asyncio.Task[Any]
+        ] = []  # Track background tasks for cleanup
 
         # Initialize memory optimization
-        if get_memory_optimizer:
-            self._memory_optimizer = get_memory_optimizer()
+        if _get_memory_optimizer:
+            self._memory_optimizer = _get_memory_optimizer()
             self.logger = logging.getLogger(__name__)
             self.logger.info(
                 "Memory optimizer initialized: %s",
@@ -450,8 +481,11 @@ class TradingEngine:
                     self.omnisearch_client = omnisearch_client_cls(
                         server_url=self.settings.omnisearch.server_url,
                         api_key=(
-                            self.settings.omnisearch.api_key.get_secret_value()
-                            if self.settings.omnisearch.api_key
+                            getattr(
+                                self.settings.omnisearch, "api_key", None
+                            ).get_secret_value()
+                            if hasattr(self.settings.omnisearch, "api_key")
+                            and getattr(self.settings.omnisearch, "api_key", None)
                             else None
                         ),
                         enable_cache=True,
@@ -472,6 +506,8 @@ class TradingEngine:
 
     def _initialize_websocket_components(self) -> None:
         """Initialize WebSocket-related components."""
+        # Initialize websocket_publisher to None - will be set later in _connect_optional_services
+        self.websocket_publisher = None
         self._initialize_command_consumer()
 
     def _initialize_command_consumer(self) -> None:
@@ -3774,11 +3810,36 @@ class TradingEngine:
                         # Store previous position before update
                         previous_position = self.current_position
 
-                        updated_position = (
+                        # Convert order to functional type if needed (for paper trading)
+                        if self.dry_run and self.paper_account:
+                            # Paper account returns Pydantic Order, convert to FP Order
+                            try:
+                                fp_order = TradingTypeAdapter.adapt_order_to_functional(order)
+                            except Exception as e:
+                                self.logger.warning(
+                                    "Failed to convert paper trading order to functional type: %s. Using original order.", e
+                                )
+                                fp_order = order
+                        else:
+                            # Exchange client already returns FP Order
+                            fp_order = order
+
+                        fp_updated_position = (
                             self.position_manager.update_position_from_order(
-                                order, order.price or current_price
+                                fp_order, order.price or current_price
                             )
                         )
+                        
+                        # Convert functional position back to legacy Position type for main.py
+                        try:
+                            from .fp.types.trading import convert_functional_to_pydantic_position
+                            updated_position = convert_functional_to_pydantic_position(fp_updated_position)
+                        except Exception as e:
+                            self.logger.warning(
+                                "Failed to convert functional position to legacy type: %s. Using functional position.", e
+                            )
+                            updated_position = fp_updated_position
+                        
                         self.current_position = updated_position
 
                         # Publish updated performance metrics after position change
@@ -4705,7 +4766,7 @@ class TradingEngine:
                 # Export trade history
                 try:
                     trade_history = self.position_manager.export_trade_history(
-                        days=30, format="json"
+                        days=30, export_format="json"
                     )
                     from .utils.path_utils import get_data_file_path
 
@@ -5383,7 +5444,7 @@ def export_trades(days: int, export_format: str, output: str | None) -> None:
         position_manager = PositionManager(paper_trading_account=paper_account)
 
         trade_history = position_manager.export_trade_history(
-            days=days, format=export_format
+            days=days, export_format=export_format
         )
 
         if not output:

@@ -763,9 +763,15 @@ class RSIMFIIndicator:
 
             summary.update(
                 {
-                    "positive_periods": int(positive_count),
-                    "negative_periods": int(negative_count),
-                    "neutral_periods": int(neutral_count),
+                    "positive_periods": positive_count.item()
+                    if hasattr(positive_count, "item")
+                    else int(positive_count),
+                    "negative_periods": negative_count.item()
+                    if hasattr(negative_count, "item")
+                    else int(negative_count),
+                    "neutral_periods": neutral_count.item()
+                    if hasattr(neutral_count, "item")
+                    else int(neutral_count),
                 }
             )
 
@@ -777,9 +783,15 @@ class RSIMFIIndicator:
 
             summary.update(
                 {
-                    "bull_area_periods": int(bull_area_count),
-                    "bear_area_periods": int(bear_area_count),
-                    "neutral_area_periods": int(neutral_area_count),
+                    "bull_area_periods": bull_area_count.item()
+                    if hasattr(bull_area_count, "item")
+                    else int(bull_area_count),
+                    "bear_area_periods": bear_area_count.item()
+                    if hasattr(bear_area_count, "item")
+                    else int(bear_area_count),
+                    "neutral_area_periods": neutral_area_count.item()
+                    if hasattr(neutral_area_count, "item")
+                    else int(neutral_area_count),
                 }
             )
 

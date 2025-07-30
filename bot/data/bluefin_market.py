@@ -237,6 +237,11 @@ class BluefinMarketDataProvider:
             "ETH-USD": "ETH-PERP",
             "SOL-USD": "SOL-PERP",
             "SUI-USD": "SUI-PERP",
+            # Direct PERP symbols (already in correct format)
+            "BTC-PERP": "BTC-PERP",
+            "ETH-PERP": "ETH-PERP",
+            "SOL-PERP": "SOL-PERP",
+            "SUI-PERP": "SUI-PERP",
         }
 
         return symbol_map.get(symbol, symbol)
@@ -1139,7 +1144,9 @@ class BluefinMarketDataProvider:
         status["data_quality"] = (
             "excellent"
             if total_cached_candles >= 200
-            else "good" if total_cached_candles >= 100 else "insufficient"
+            else "good"
+            if total_cached_candles >= 100
+            else "insufficient"
         )
 
         return status
@@ -1843,9 +1850,12 @@ class BluefinMarketDataProvider:
                         bluefin_interval,
                     )
 
+            # Convert symbol to Bluefin format if needed
+            bluefin_symbol = self._convert_symbol(symbol)
+
             # Prepare request parameters
             params = {
-                "symbol": symbol,
+                "symbol": bluefin_symbol,
                 "interval": bluefin_interval,
                 "limit": str(limit),
                 "startTime": str(int(start_time.timestamp() * 1000)),

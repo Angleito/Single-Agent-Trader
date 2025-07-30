@@ -1049,9 +1049,7 @@ class ConsoleNotificationProvider(NotificationProvider):
                     AlertSeverity.MEDIUM: "\\033[33m",  # Yellow
                     AlertSeverity.HIGH: "\\033[31m",  # Red
                     AlertSeverity.CRITICAL: "\\033[35m",  # Magenta
-                }.get(
-                    alert_event.rule.severity, "\\033[37m"
-                )  # White
+                }.get(alert_event.rule.severity, "\\033[37m")  # White
 
                 reset_color = "\\033[0m"
 

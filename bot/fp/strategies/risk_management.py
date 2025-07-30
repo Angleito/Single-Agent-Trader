@@ -446,7 +446,7 @@ def calculate_position_size_with_stop(
 
 
 def calculate_correlation_adjustment(
-    correlations: dict[str, float],
+    correlations: dict[tuple[str, str], float],
     base_position_sizes: dict[str, float],
     correlation_penalty: float = 0.5,
 ) -> dict[str, float]:

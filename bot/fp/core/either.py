@@ -127,12 +127,12 @@ class Right(Either[E, T]):
 
 
 # Utility functions for creating Either instances
-def left[E](value: E) -> Either[E, T]:
+def left[E, T](value: E) -> Either[E, T]:
     """Create a Left Either."""
     return Left(value)
 
 
-def right[T](value: T) -> Either[E, T]:
+def right[E, T](value: T) -> Either[E, T]:
     """Create a Right Either."""
     return Right(value)
 
@@ -158,7 +158,7 @@ def sequence_either[E, T](eithers: list[Either[E, T]]) -> Either[E, list[T]]:
     return Right(results)
 
 
-def traverse_either(
+def traverse_either[T, E, U](
     items: list[T], func: Callable[[T], Either[E, U]]
 ) -> Either[E, list[U]]:
     """Apply function to each item and sequence results."""

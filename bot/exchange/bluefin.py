@@ -222,10 +222,10 @@ class BluefinClient(BaseExchange):
         elif settings.exchange.bluefin_private_key:
             # Extract from SecretStr or SecureString settings
             private_key_setting = settings.exchange.bluefin_private_key
-            if hasattr(private_key_setting, 'get_secret_value'):
+            if hasattr(private_key_setting, "get_secret_value"):
                 # Pydantic SecretStr
                 self.private_key = private_key_setting.get_secret_value()
-            elif hasattr(private_key_setting, 'get_value'):
+            elif hasattr(private_key_setting, "get_value"):
                 # SecureString
                 self.private_key = private_key_setting.get_value()
             else:
@@ -774,6 +774,11 @@ class BluefinClient(BaseExchange):
                 "ETH-USD": "ETH-PERP",
                 "SOL-USD": "SOL-PERP",
                 "SUI-USD": "SUI-PERP",
+                # Direct PERP symbols (already in correct format)
+                "BTC-PERP": "BTC-PERP",
+                "ETH-PERP": "ETH-PERP",
+                "SOL-PERP": "SOL-PERP",
+                "SUI-PERP": "SUI-PERP",
             }
             fallback_symbol = symbol_map.get(symbol, symbol)
 

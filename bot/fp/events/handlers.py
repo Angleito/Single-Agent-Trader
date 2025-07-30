@@ -259,9 +259,9 @@ class EventDispatcher:
 
 
 # Handler composition utilities
-def compose_handlers[
-    E: Event
-](*handlers: EventHandler[E, Any],) -> EventHandler[E, list[Any]]:
+def compose_handlers[E: Event](
+    *handlers: EventHandler[E, Any],
+) -> EventHandler[E, list[Any]]:
     """Compose multiple handlers into one."""
 
     class ComposedHandler:

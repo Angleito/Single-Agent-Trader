@@ -1,8 +1,10 @@
 """Type stubs for pandas_ta library."""
 
-from typing import Any, overload
+from typing import Any
 
-from pandas import DataFrame, Series
+# Use Any for pandas types to avoid import issues in stub files
+DataFrame = Any
+Series = Any
 
 __all__ = [
     "adx",
@@ -45,85 +47,60 @@ __all__ = [
 ]
 
 # RSI
-@overload
 def rsi(
-    close: Series,
+    close: Any,
     length: int | None = None,
     scalar: float | None = None,
     drift: int | None = None,
     offset: int | None = None,
     **kwargs: Any,
-) -> Series: ...
-@overload
-def rsi(
-    close: DataFrame,
-    length: int | None = None,
-    scalar: float | None = None,
-    drift: int | None = None,
-    offset: int | None = None,
-    **kwargs: Any,
-) -> DataFrame: ...
+) -> Any: ...
 
 # EMA
-@overload
 def ema(
-    close: Series, length: int | None = None, offset: int | None = None, **kwargs: Any
-) -> Series: ...
-@overload
-def ema(
-    close: DataFrame,
-    length: int | None = None,
-    offset: int | None = None,
-    **kwargs: Any,
-) -> DataFrame: ...
+    close: Any, 
+    length: int | None = None, 
+    offset: int | None = None, 
+    **kwargs: Any
+) -> Any: ...
 
 # SMA
-@overload
 def sma(
-    close: Series, length: int | None = None, offset: int | None = None, **kwargs: Any
-) -> Series: ...
-@overload
-def sma(
-    close: DataFrame,
-    length: int | None = None,
-    offset: int | None = None,
-    **kwargs: Any,
-) -> DataFrame: ...
+    close: Any, 
+    length: int | None = None, 
+    offset: int | None = None, 
+    **kwargs: Any
+) -> Any: ...
 
 # RMA (Running Moving Average)
-@overload
 def rma(
-    close: Series, length: int | None = None, offset: int | None = None, **kwargs: Any
-) -> Series: ...
-@overload
-def rma(
-    close: DataFrame,
-    length: int | None = None,
-    offset: int | None = None,
-    **kwargs: Any,
-) -> DataFrame: ...
+    close: Any, 
+    length: int | None = None, 
+    offset: int | None = None, 
+    **kwargs: Any
+) -> Any: ...
 
 # WMA
 def wma(
-    close: Series | DataFrame,
+    close: Any,
     length: int | None = None,
     offset: int | None = None,
     **kwargs: Any,
-) -> Series | DataFrame: ...
+) -> Any: ...
 
 # HMA
 def hma(
-    close: Series | DataFrame,
+    close: Any,
     length: int | None = None,
     offset: int | None = None,
     **kwargs: Any,
-) -> Series | DataFrame: ...
+) -> Any: ...
 
 # Stochastic
 def stoch(
-    high: Series | DataFrame,
-    low: Series | DataFrame,
-    close: Series | DataFrame,
+    high: Any,
+    low: Any,
+    close: Any,
     k: int | None = None,
     d: int | None = None,
     smooth_k: int | None = None,
@@ -133,7 +110,7 @@ def stoch(
 
 # Stochastic RSI
 def stochrsi(
-    close: Series | DataFrame,
+    close: Any,
     length: int | None = None,
     rsi_length: int | None = None,
     k: int | None = None,
@@ -144,7 +121,7 @@ def stochrsi(
 
 # Bollinger Bands
 def bbands(
-    close: Series | DataFrame,
+    close: Any,
     length: int | None = None,
     std: float | None = None,
     ddof: int | None = None,
@@ -154,20 +131,20 @@ def bbands(
 
 # ATR
 def atr(
-    high: Series | DataFrame,
-    low: Series | DataFrame,
-    close: Series | DataFrame,
+    high: Any,
+    low: Any,
+    close: Any,
     length: int | None = None,
     mamode: str | None = None,
     offset: int | None = None,
     **kwargs: Any,
-) -> Series | DataFrame: ...
+) -> Any: ...
 
 # ADX
 def adx(
-    high: Series | DataFrame,
-    low: Series | DataFrame,
-    close: Series | DataFrame,
+    high: Any,
+    low: Any,
+    close: Any,
     length: int | None = None,
     lensig: int | None = None,
     scalar: float | None = None,
@@ -178,7 +155,7 @@ def adx(
 
 # MACD
 def macd(
-    close: Series | DataFrame,
+    close: Any,
     fast: int | None = None,
     slow: int | None = None,
     signal: int | None = None,
@@ -188,99 +165,99 @@ def macd(
 
 # OBV
 def obv(
-    close: Series | DataFrame,
-    volume: Series | DataFrame,
+    close: Any,
+    volume: Any,
     offset: int | None = None,
     **kwargs: Any,
-) -> Series | DataFrame: ...
+) -> Any: ...
 
 # MFI
 def mfi(
-    high: Series | DataFrame,
-    low: Series | DataFrame,
-    close: Series | DataFrame,
-    volume: Series | DataFrame,
+    high: Any,
+    low: Any,
+    close: Any,
+    volume: Any,
     length: int | None = None,
     drift: int | None = None,
     offset: int | None = None,
     **kwargs: Any,
-) -> Series | DataFrame: ...
+) -> Any: ...
 
 # VWAP
 def vwap(
-    high: Series | DataFrame,
-    low: Series | DataFrame,
-    close: Series | DataFrame,
-    volume: Series | DataFrame,
+    high: Any,
+    low: Any,
+    close: Any,
+    volume: Any,
     anchor: str | None = None,
     offset: int | None = None,
     **kwargs: Any,
-) -> Series | DataFrame: ...
+) -> Any: ...
 
 # Linear Regression
 def linreg(
-    close: Series | DataFrame,
+    close: Any,
     length: int | None = None,
     offset: int | None = None,
     **kwargs: Any,
-) -> Series | DataFrame: ...
+) -> Any: ...
 
 # Williams %R
 def willr(
-    high: Series | DataFrame,
-    low: Series | DataFrame,
-    close: Series | DataFrame,
+    high: Any,
+    low: Any,
+    close: Any,
     length: int | None = None,
     offset: int | None = None,
     **kwargs: Any,
-) -> Series | DataFrame: ...
+) -> Any: ...
 
 # CCI
 def cci(
-    high: Series | DataFrame,
-    low: Series | DataFrame,
-    close: Series | DataFrame,
+    high: Any,
+    low: Any,
+    close: Any,
     length: int | None = None,
     c: float | None = None,
     offset: int | None = None,
     **kwargs: Any,
-) -> Series | DataFrame: ...
+) -> Any: ...
 
 # CMF
 def cmf(
-    high: Series | DataFrame,
-    low: Series | DataFrame,
-    close: Series | DataFrame,
-    volume: Series | DataFrame,
+    high: Any,
+    low: Any,
+    close: Any,
+    volume: Any,
     length: int | None = None,
     offset: int | None = None,
     **kwargs: Any,
-) -> Series | DataFrame: ...
+) -> Any: ...
 
 # Standard Deviation
 def stdev(
-    close: Series | DataFrame,
+    close: Any,
     length: int | None = None,
     ddof: int | None = None,
     offset: int | None = None,
     **kwargs: Any,
-) -> Series | DataFrame: ...
+) -> Any: ...
 
 # Z-Score
 def zscore(
-    close: Series | DataFrame,
+    close: Any,
     length: int | None = None,
     std: float | None = None,
     offset: int | None = None,
     **kwargs: Any,
-) -> Series | DataFrame: ...
+) -> Any: ...
 
 # Heikin Ashi
 def ha(
-    open_: Series | DataFrame,
-    high: Series | DataFrame,
-    low: Series | DataFrame,
-    close: Series | DataFrame,
+    open_: Any,
+    high: Any,
+    low: Any,
+    close: Any,
     offset: int | None = None,
     **kwargs: Any,
 ) -> DataFrame: ...

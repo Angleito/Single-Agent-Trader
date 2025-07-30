@@ -105,10 +105,10 @@ class ExchangeFactory:
                 settings.exchange, "bluefin_private_key", None
             )
             if private_key_setting is not None:
-                if hasattr(private_key_setting, 'get_secret_value'):
+                if hasattr(private_key_setting, "get_secret_value"):
                     # Pydantic SecretStr
                     private_key = private_key_setting.get_secret_value()
-                elif hasattr(private_key_setting, 'get_value'):
+                elif hasattr(private_key_setting, "get_value"):
                     # SecureString
                     private_key = private_key_setting.get_value()
                 else:

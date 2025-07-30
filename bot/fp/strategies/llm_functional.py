@@ -61,23 +61,50 @@ def create_market_context(
     lookback_periods: int = 20,
 ) -> LLMContext:
     """Create context for LLM from market state and indicators."""
-    # Extract relevant indicator values
+    # Extract relevant indicator values with null safety
     indicators = {
         "vumanchu_a": {
-            "current": vumanchu_state.cipher_a[-1] if vumanchu_state.cipher_a else 0,
-            "trend": _calculate_trend(vumanchu_state.cipher_a, lookback_periods),
-            "signal": vumanchu_state.buy_signal or vumanchu_state.sell_signal,
-            "divergence": vumanchu_state.bullish_divergence
-            or vumanchu_state.bearish_divergence,
+            "current": (
+                vumanchu_state.cipher_a[-1]
+                if vumanchu_state and vumanchu_state.cipher_a
+                else 0
+            ),
+            "trend": (
+                _calculate_trend(vumanchu_state.cipher_a, lookback_periods)
+                if vumanchu_state and vumanchu_state.cipher_a
+                else "NEUTRAL"
+            ),
+            "signal": (vumanchu_state.buy_signal or vumanchu_state.sell_signal)
+            if vumanchu_state
+            else False,
+            "divergence": (
+                vumanchu_state.bullish_divergence or vumanchu_state.bearish_divergence
+            )
+            if vumanchu_state
+            else False,
         },
         "vumanchu_b": {
             "wave_trend": (
-                vumanchu_state.wave_trend[-1] if vumanchu_state.wave_trend else 0
+                vumanchu_state.wave_trend[-1]
+                if vumanchu_state
+                and hasattr(vumanchu_state, "wave_trend")
+                and vumanchu_state.wave_trend
+                else 0
             ),
             "money_flow": (
-                vumanchu_state.money_flow[-1] if vumanchu_state.money_flow else 0
+                vumanchu_state.money_flow[-1]
+                if vumanchu_state
+                and hasattr(vumanchu_state, "money_flow")
+                and vumanchu_state.money_flow
+                else 0
             ),
-            "trend_direction": _get_trend_direction(vumanchu_state.wave_trend),
+            "trend_direction": (
+                _get_trend_direction(vumanchu_state.wave_trend)
+                if vumanchu_state
+                and hasattr(vumanchu_state, "wave_trend")
+                and vumanchu_state.wave_trend
+                else "NEUTRAL"
+            ),
         },
         "price_action": {
             "current_price": market_state.current_price,

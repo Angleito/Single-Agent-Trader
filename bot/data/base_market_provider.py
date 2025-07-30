@@ -91,7 +91,6 @@ class AbstractMarketDataProvider(ABC):
         Args:
             fetch_historical: Whether to fetch historical data during connection
         """
-        pass
 
     @abstractmethod
     async def fetch_historical_data(
@@ -111,7 +110,6 @@ class AbstractMarketDataProvider(ABC):
         Returns:
             List of MarketData objects
         """
-        pass
 
     @abstractmethod
     async def fetch_latest_price(self) -> Decimal | None:
@@ -121,7 +119,6 @@ class AbstractMarketDataProvider(ABC):
         Returns:
             Latest price as Decimal or None if unavailable
         """
-        pass
 
     @abstractmethod
     async def _connect_websocket(self) -> None:
@@ -129,12 +126,9 @@ class AbstractMarketDataProvider(ABC):
         Establish WebSocket connection and handle messages.
         Must be implemented by exchange-specific providers.
         """
-        pass
 
     @abstractmethod
-    async def _handle_websocket_message(
-        self, message: dict[str, Any]
-    ) -> None:
+    async def _handle_websocket_message(self, message: dict[str, Any]) -> None:
         """
         Handle incoming WebSocket messages.
         Must be implemented by exchange-specific providers.
@@ -142,7 +136,6 @@ class AbstractMarketDataProvider(ABC):
         Args:
             message: Parsed WebSocket message
         """
-        pass
 
     async def disconnect(self) -> None:
         """Disconnect from all data feeds and cleanup resources."""
@@ -243,16 +236,14 @@ class AbstractMarketDataProvider(ABC):
                 self._background_tasks.add(task)
                 task.add_done_callback(self._background_tasks.discard)
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # No message available, continue loop
                 continue
             except Exception:
                 logger.exception("Error in message processor")
                 await asyncio.sleep(0.1)
 
-    async def _handle_websocket_message_async(
-        self, message: dict[str, Any]
-    ) -> None:
+    async def _handle_websocket_message_async(self, message: dict[str, Any]) -> None:
         """
         Handle WebSocket message asynchronously without blocking the queue processor.
 
@@ -630,9 +621,7 @@ class AbstractMarketDataProvider(ABC):
 
         return self._tick_cache[-limit:].copy()
 
-    async def fetch_orderbook(
-        self, level: int = 2
-    ) -> dict[str, Any] | None:
+    async def fetch_orderbook(self, level: int = 2) -> dict[str, Any] | None:
         """
         Fetch order book data from exchange REST API.
         Default implementation returns None. Override in exchange-specific providers.

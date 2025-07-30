@@ -290,21 +290,39 @@ class CipherA:
 
         # 8. Detect divergences - use regular divergences for cipher A
         try:
-            divergence_result = self.divergence_detector.detect_regular_divergences(
+            divergence_signals = self.divergence_detector.detect_regular_divergences(
                 result["close"], result.get("wt1", result["close"])
             )
-            # Merge divergence results
-            for col, values in divergence_result.items():
-                result[f"cipher_a_{col}"] = values
+            # Convert divergence signals to boolean series
+            bullish_divs = pd.Series(False, index=result.index)
+            bearish_divs = pd.Series(False, index=result.index)
+
+            for signal in divergence_signals:
+                if signal.type.value in ["regular_bullish", "hidden_bullish"]:
+                    if signal.end_fractal.index < len(bullish_divs):
+                        bullish_divs.iloc[signal.end_fractal.index] = True
+                elif signal.type.value in ["regular_bearish", "hidden_bearish"]:
+                    if signal.end_fractal.index < len(bearish_divs):
+                        bearish_divs.iloc[signal.end_fractal.index] = True
+
+            result["cipher_a_bullish_divergence"] = bullish_divs
+            result["cipher_a_bearish_divergence"] = bearish_divs
         except Exception as e:
             logger.warning(f"Divergence detection failed: {e}")
 
         # 9. Calculate Sommi flags (most relevant Sommi pattern for Cipher A)
         try:
-            sommi_result = self.sommi_patterns.calculate_sommi_flags(result)
-            # Merge Sommi results
-            for col, values in sommi_result.items():
-                result[f"sommi_{col}"] = values
+            sommi_result = self.sommi_patterns.calculate(result)
+            # Merge Sommi pattern columns to result
+            sommi_columns = [
+                "sommi_flag_up",
+                "sommi_flag_down",
+                "sommi_diamond_up",
+                "sommi_diamond_down",
+            ]
+            for col in sommi_columns:
+                if col in sommi_result.columns:
+                    result[col] = sommi_result[col]
         except Exception as e:
             logger.warning(f"Sommi pattern detection failed: {e}")
 
@@ -337,18 +355,38 @@ class CipherA:
 
         # Handle divergences and sommi patterns with error handling
         try:
-            divergence_result = self.divergence_detector.detect_regular_divergences(
+            divergence_signals = self.divergence_detector.detect_regular_divergences(
                 result["close"], result.get("wt1", result["close"])
             )
-            for col, values in divergence_result.items():
-                result[f"cipher_a_{col}"] = values
+            # Convert divergence signals to boolean series
+            bullish_divs = pd.Series(False, index=result.index)
+            bearish_divs = pd.Series(False, index=result.index)
+
+            for signal in divergence_signals:
+                if signal.type.value in ["regular_bullish", "hidden_bullish"]:
+                    if signal.end_fractal.index < len(bullish_divs):
+                        bullish_divs.iloc[signal.end_fractal.index] = True
+                elif signal.type.value in ["regular_bearish", "hidden_bearish"]:
+                    if signal.end_fractal.index < len(bearish_divs):
+                        bearish_divs.iloc[signal.end_fractal.index] = True
+
+            result["cipher_a_bullish_divergence"] = bullish_divs
+            result["cipher_a_bearish_divergence"] = bearish_divs
         except Exception as e:
             logger.warning(f"Divergence detection failed in functional mode: {e}")
 
         try:
-            sommi_result = self.sommi_patterns.calculate_sommi_flags(result)
-            for col, values in sommi_result.items():
-                result[f"sommi_{col}"] = values
+            sommi_result = self.sommi_patterns.calculate(result)
+            # Merge Sommi pattern columns to result
+            sommi_columns = [
+                "sommi_flag_up",
+                "sommi_flag_down",
+                "sommi_diamond_up",
+                "sommi_diamond_down",
+            ]
+            for col in sommi_columns:
+                if col in sommi_result.columns:
+                    result[col] = sommi_result[col]
         except Exception as e:
             logger.warning(f"Sommi pattern detection failed in functional mode: {e}")
 
@@ -513,10 +551,71 @@ class CipherB:
             result = self._calculate_vwap(result)
 
             # Generate Cipher B signals
-            result = self.cipher_b_signals.generate_signals(result, self)
+            cipher_b_analysis = self.cipher_b_signals.get_all_cipher_b_signals(result)
 
-            # Detect divergences
-            return self.divergence_detector.detect_cipher_b_divergences(result)
+            # Extract signal data and add to result DataFrame
+            if cipher_b_analysis and cipher_b_analysis.get("basic_signals"):
+                basic_signals = cipher_b_analysis.get("basic_signals", {})
+                result["cipher_b_buy_signal"] = basic_signals.get(
+                    "buy_signal", pd.Series(False, index=result.index)
+                )
+                result["cipher_b_sell_signal"] = basic_signals.get(
+                    "sell_signal", pd.Series(False, index=result.index)
+                )
+                result["cipher_b_wt_oversold"] = basic_signals.get(
+                    "wt_oversold", pd.Series(False, index=result.index)
+                )
+                result["cipher_b_wt_overbought"] = basic_signals.get(
+                    "wt_overbought", pd.Series(False, index=result.index)
+                )
+
+                # Add gold signals if available
+                gold_signals = cipher_b_analysis.get("gold_signals")
+                if gold_signals is not None:
+                    result["cipher_b_gold_signal"] = gold_signals
+                else:
+                    result["cipher_b_gold_signal"] = pd.Series(
+                        False, index=result.index
+                    )
+            else:
+                # Add fallback columns
+                result["cipher_b_buy_signal"] = pd.Series(False, index=result.index)
+                result["cipher_b_sell_signal"] = pd.Series(False, index=result.index)
+                result["cipher_b_wt_oversold"] = pd.Series(False, index=result.index)
+                result["cipher_b_wt_overbought"] = pd.Series(False, index=result.index)
+                result["cipher_b_gold_signal"] = pd.Series(False, index=result.index)
+
+            # Detect divergences for Cipher B
+            try:
+                divergence_signals = (
+                    self.divergence_detector.detect_regular_divergences(
+                        result.get("wt1", result["close"]), result["close"]
+                    )
+                )
+                # Convert divergence signals to boolean series
+                bullish_divs = pd.Series(False, index=result.index)
+                bearish_divs = pd.Series(False, index=result.index)
+
+                for signal in divergence_signals:
+                    if signal.type.value in ["regular_bullish", "hidden_bullish"]:
+                        if signal.end_fractal.index < len(bullish_divs):
+                            bullish_divs.iloc[signal.end_fractal.index] = True
+                    elif signal.type.value in ["regular_bearish", "hidden_bearish"]:
+                        if signal.end_fractal.index < len(bearish_divs):
+                            bearish_divs.iloc[signal.end_fractal.index] = True
+
+                result["cipher_b_bullish_divergence"] = bullish_divs
+                result["cipher_b_bearish_divergence"] = bearish_divs
+            except Exception as e:
+                logger.warning(f"Cipher B divergence detection failed: {e}")
+                result["cipher_b_bullish_divergence"] = pd.Series(
+                    False, index=result.index
+                )
+                result["cipher_b_bearish_divergence"] = pd.Series(
+                    False, index=result.index
+                )
+
+            return result
 
         except Exception:
             logger.exception("Error in Cipher B calculation")

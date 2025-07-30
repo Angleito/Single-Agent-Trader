@@ -242,9 +242,45 @@ class FunctionalLLMStrategy:
 
     def _extract_vumanchu_state(self, market_state: MarketState):
         """Extract VuManChu state from market state indicators."""
-        # This would extract the VuManChu state from the indicators
-        # For now, return None to work with the create_market_context function
-        return
+        # Check if indicators are available in market state
+        if not hasattr(market_state, "indicators") or not market_state.indicators:
+            return None
+
+        # Try to extract VuManChu data from indicators
+        indicators = market_state.indicators
+
+        # Create a simple VuManChu state object with available data
+        class VuManChuState:
+            def __init__(self):
+                self.cipher_a = None
+                self.cipher_b = None
+                self.buy_signal = False
+                self.sell_signal = False
+                self.bullish_divergence = False
+                self.bearish_divergence = False
+
+        vumanchu_state = VuManChuState()
+
+        # Extract cipher_a data if available
+        if "cipher_a" in indicators:
+            vumanchu_state.cipher_a = indicators["cipher_a"]
+        elif "wavetrend" in indicators:
+            # Use wavetrend as fallback for cipher_a
+            vumanchu_state.cipher_a = indicators["wavetrend"]
+
+        # Extract cipher_b data if available
+        if "cipher_b" in indicators:
+            vumanchu_state.cipher_b = indicators["cipher_b"]
+
+        # Extract signals if available
+        if "signals" in indicators:
+            signals = indicators["signals"]
+            vumanchu_state.buy_signal = signals.get("buy", False)
+            vumanchu_state.sell_signal = signals.get("sell", False)
+            vumanchu_state.bullish_divergence = signals.get("bullish_divergence", False)
+            vumanchu_state.bearish_divergence = signals.get("bearish_divergence", False)
+
+        return vumanchu_state
 
     async def _call_llm(self, prompt: str) -> str:
         """Call the LLM with the given prompt."""
@@ -567,7 +603,8 @@ class LLMAgentAdapter:
             "strategy_type": "functional",
             "completion_count": self._completion_count,
             "omnisearch_enabled": self._omnisearch_client is not None,
-            "available": True,
+            "llm_available": True,
+            "available": True,  # Keep both for compatibility
         }
 
 
@@ -770,5 +807,6 @@ class MemoryEnhancedLLMAgentAdapter:
             "memory_server_connected": (
                 self.memory_server is not None if self.memory_server else False
             ),
-            "available": True,
+            "llm_available": True,
+            "available": True,  # Keep both for compatibility
         }

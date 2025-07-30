@@ -23,7 +23,7 @@ try:
     from bot.security.memory import SecureString
 except ImportError:
     # Fallback to string if SecureString not available
-    SecureString = str
+    SecureString = str  # type: ignore[assignment]
 
 if TYPE_CHECKING:
     from bot.fp.types.result import Failure, Result, Success
@@ -130,7 +130,7 @@ def parse_env_var(key: str, default: str | None = None) -> str | None:
     return os.environ.get(key, default)
 
 
-def _get_functional_config():
+def _get_functional_config() -> tuple[Any, Any, Any, Any]:  # type: ignore[misc]
     """Lazy load functional configuration types."""
     try:
         from bot.fp.types.config import Config as FunctionalConfig
@@ -176,8 +176,13 @@ class StartupValidator:
                 issues.append("OpenAI API key is required when using OpenAI provider")
         elif self.settings.llm.provider == "anthropic":
             if not self.settings.llm.anthropic_api_key:
-                issues.append("Anthropic API key is required when using Anthropic provider")
-        elif self.settings.llm.provider == "ollama" and not self.settings.llm.ollama_base_url:
+                issues.append(
+                    "Anthropic API key is required when using Anthropic provider"
+                )
+        elif (
+            self.settings.llm.provider == "ollama"
+            and not self.settings.llm.ollama_base_url
+        ):
             issues.append("Ollama base URL is required when using Ollama provider")
 
         # Exchange credentials validation (for live trading)
@@ -186,7 +191,9 @@ class StartupValidator:
                 if not self.settings.exchange.cdp_api_key_name:
                     issues.append("Coinbase CDP API key is required for live trading")
                 if not self.settings.exchange.cdp_private_key:
-                    issues.append("Coinbase CDP private key is required for live trading")
+                    issues.append(
+                        "Coinbase CDP private key is required for live trading"
+                    )
             elif self.settings.exchange.exchange_type == "bluefin":
                 if not self.settings.exchange.bluefin_private_key:
                     issues.append("Bluefin private key is required for live trading")
@@ -211,15 +218,22 @@ class StartupValidator:
             issues.append("Position size above 50% is extremely risky")
 
         # Risk management validation
-        if self.settings.risk.default_stop_loss_pct >= self.settings.risk.default_take_profit_pct:
-            issues.append("Stop loss should be smaller than take profit for positive risk/reward")
+        if (
+            self.settings.risk.default_stop_loss_pct
+            >= self.settings.risk.default_take_profit_pct
+        ):
+            issues.append(
+                "Stop loss should be smaller than take profit for positive risk/reward"
+            )
 
         if self.settings.risk.max_concurrent_trades > 20:
             issues.append("Too many concurrent trades may lead to overexposure")
 
         # Data configuration validation
         if self.settings.data.candle_limit < 50:
-            issues.append("Candle limit below 50 may not provide enough data for analysis")
+            issues.append(
+                "Candle limit below 50 may not provide enough data for analysis"
+            )
 
         if self.settings.data.candle_limit > 1000:
             issues.append("Candle limit above 1000 may impact performance")
@@ -227,7 +241,7 @@ class StartupValidator:
         self.validation_results["configuration"] = issues
         return issues
 
-    def run_comprehensive_validation(self) -> dict[str, Any]:
+    def run_comprehensive_validation(self) -> dict[str, Any]:  # type: ignore[misc]
         """Run all validation checks and return comprehensive results."""
         # Run validation checks
         env_issues = self.validate_environment_variables()
@@ -238,7 +252,9 @@ class StartupValidator:
         warning_issues = []
 
         for issue in env_issues:
-            if any(keyword in issue.lower() for keyword in ["required", "failed", "cannot"]):
+            if any(
+                keyword in issue.lower() for keyword in ["required", "failed", "cannot"]
+            ):
                 critical_issues.append(issue)
             else:
                 warning_issues.append(issue)
@@ -251,7 +267,7 @@ class StartupValidator:
                 warning_issues.append(issue)
 
         # Build final results
-        results = {
+        results: dict[str, Any] = {  # type: ignore[misc]
             "timestamp": datetime.now(UTC).isoformat(),
             "valid": len(critical_issues) == 0,
             "critical_errors": critical_issues,
@@ -260,7 +276,9 @@ class StartupValidator:
             "configuration_summary": {
                 "environment": self.settings.system.environment,
                 "dry_run": self.settings.system.dry_run,
-                "profile": getattr(self.settings, 'profile', TradingProfile.BALANCED).value,
+                "profile": getattr(
+                    self.settings, "profile", TradingProfile.BALANCED
+                ).value,
                 "llm_provider": self.settings.llm.provider,
                 "trading_symbol": self.settings.trading.symbol,
                 "leverage": self.settings.trading.leverage,
@@ -271,32 +289,30 @@ class StartupValidator:
 
 
 # Compatibility adapters using functional programming types
-@dataclass
+@dataclass  # type: ignore[misc]
 class TradingSettings:
     """Trading configuration settings using functional types."""
 
-    def __init__(self, functional_config: Any = None, **kwargs):
+    def __init__(self, functional_config: Any = None, **kwargs: Any) -> None:  # type: ignore[misc]
         # Use functional config if provided, otherwise environment/kwargs
         if functional_config:
             # Extract from functional config based on strategy type
             self._from_functional_config(functional_config)
         else:
             # Load from kwargs first (overrides), then environment, then defaults
-            self.symbol: str = kwargs.get("symbol") or os.getenv(
-                "TRADING__SYMBOL", "BTC-USD"
+            self.symbol: str = str(
+                kwargs.get("symbol") or os.getenv("TRADING__SYMBOL", "BTC-USD")
             )
-            self.interval: str = kwargs.get("interval") or os.getenv(
-                "TRADING__INTERVAL", "1m"
+            self.interval: str = str(
+                kwargs.get("interval") or os.getenv("TRADING__INTERVAL", "1m")
             )
-            self.leverage: int = (
-                kwargs.get("leverage")
-                if kwargs.get("leverage") is not None
-                else parse_int_env("TRADING__LEVERAGE", 5)
+            self.leverage: int = int(
+                kwargs.get("leverage", parse_int_env("TRADING__LEVERAGE", 5))
             )
-            self.max_size_pct: float = (
-                kwargs.get("max_size_pct")
-                if kwargs.get("max_size_pct") is not None
-                else parse_float_env("TRADING__MAX_SIZE_PCT", 20.0)
+            self.max_size_pct: float = float(
+                kwargs.get(
+                    "max_size_pct", parse_float_env("TRADING__MAX_SIZE_PCT", 20.0)
+                )
             )
             self.order_timeout_seconds: int = parse_int_env(
                 "TRADING__ORDER_TIMEOUT_SECONDS",
@@ -333,9 +349,10 @@ class TradingSettings:
             self.enable_futures: bool = parse_bool_env(
                 "TRADING__ENABLE_FUTURES", kwargs.get("enable_futures", True)
             )
-            self.futures_account_type: str = kwargs.get(
-                "futures_account_type"
-            ) or os.getenv("TRADING__FUTURES_ACCOUNT_TYPE", "CFM")
+            self.futures_account_type: str = str(
+                kwargs.get("futures_account_type")
+                or os.getenv("TRADING__FUTURES_ACCOUNT_TYPE", "CFM")
+            )
             self.auto_cash_transfer: bool = parse_bool_env(
                 "TRADING__AUTO_CASH_TRANSFER", kwargs.get("auto_cash_transfer", True)
             )
@@ -344,8 +361,7 @@ class TradingSettings:
                 kwargs.get("max_futures_leverage", 20),
             )
             self.use_fifo_accounting: bool = parse_bool_env(
-                "TRADING__USE_FIFO_ACCOUNTING",
-                kwargs.get("use_fifo_accounting", True)
+                "TRADING__USE_FIFO_ACCOUNTING", kwargs.get("use_fifo_accounting", True)
             )
 
     def _from_functional_config(self, _config: Any) -> None:
@@ -380,11 +396,11 @@ class LLMSettings:
             self._from_functional_config(functional_config)
         else:
             # Load from kwargs first (overrides), then environment, then defaults
-            self.provider: str = kwargs.get("provider") or os.getenv(
-                "LLM__PROVIDER", "openai"
+            self.provider: str = str(
+                kwargs.get("provider") or os.getenv("LLM__PROVIDER", "openai")
             )
-            self.model_name: str = kwargs.get("model_name") or os.getenv(
-                "LLM__MODEL_NAME", "gpt-4"
+            self.model_name: str = str(
+                kwargs.get("model_name") or os.getenv("LLM__MODEL_NAME", "gpt-4")
             )
             self.temperature: float = parse_float_env(
                 "LLM__TEMPERATURE", kwargs.get("temperature", 0.1)
@@ -406,11 +422,13 @@ class LLMSettings:
             api_key = os.getenv("LLM__OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
             if api_key:
                 self.openai_api_key = SecretStr(api_key)
-            
-            anthropic_key = os.getenv("LLM__ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
+
+            anthropic_key = os.getenv("LLM__ANTHROPIC_API_KEY") or os.getenv(
+                "ANTHROPIC_API_KEY"
+            )
             if anthropic_key:
                 self.anthropic_api_key = SecretStr(anthropic_key)
-                
+
             self.ollama_base_url = os.getenv("LLM__OLLAMA_BASE_URL")
 
     def _from_functional_config(self, config: Any) -> None:
@@ -432,11 +450,13 @@ class LLMSettings:
             api_key = os.getenv("LLM__OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
             if api_key:
                 self.openai_api_key = SecretStr(api_key)
-                
-            anthropic_key = os.getenv("LLM__ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
+
+            anthropic_key = os.getenv("LLM__ANTHROPIC_API_KEY") or os.getenv(
+                "ANTHROPIC_API_KEY"
+            )
             if anthropic_key:
                 self.anthropic_api_key = SecretStr(anthropic_key)
-                
+
             self.ollama_base_url = os.getenv("LLM__OLLAMA_BASE_URL")
         else:
             # Set defaults for non-LLM strategies
@@ -470,8 +490,9 @@ class ExchangeSettings:
             self._from_functional_config(functional_config)
         else:
             # Load from kwargs first (overrides), then environment, then defaults
-            self.exchange_type: str = kwargs.get("exchange_type") or os.getenv(
-                "EXCHANGE__EXCHANGE_TYPE", "coinbase"
+            self.exchange_type: str = str(
+                kwargs.get("exchange_type")
+                or os.getenv("EXCHANGE__EXCHANGE_TYPE", "coinbase")
             )
             self.cb_sandbox: bool = parse_bool_env(
                 "EXCHANGE__CB_SANDBOX", kwargs.get("cb_sandbox", True)
@@ -486,8 +507,9 @@ class ExchangeSettings:
                 "EXCHANGE__RATE_LIMIT_WINDOW_SECONDS",
                 kwargs.get("rate_limit_window_seconds", 60),
             )
-            self.bluefin_network: str = kwargs.get("bluefin_network") or os.getenv(
-                "EXCHANGE__BLUEFIN_NETWORK", "mainnet"
+            self.bluefin_network: str = str(
+                kwargs.get("bluefin_network")
+                or os.getenv("EXCHANGE__BLUEFIN_NETWORK", "mainnet")
             )
 
             # WebSocket settings
@@ -499,7 +521,8 @@ class ExchangeSettings:
                 "EXCHANGE__WEBSOCKET_TIMEOUT", kwargs.get("websocket_timeout", 30)
             )
             self.use_trade_aggregation: bool = parse_bool_env(
-                "EXCHANGE__USE_TRADE_AGGREGATION", kwargs.get("use_trade_aggregation", True)
+                "EXCHANGE__USE_TRADE_AGGREGATION",
+                kwargs.get("use_trade_aggregation", True),
             )
 
             # Load credentials from environment
@@ -536,7 +559,7 @@ class ExchangeSettings:
             self.rate_limit_requests = config.rate_limits.requests_per_minute
             self.rate_limit_window_seconds = 60
             self.bluefin_network = "mainnet"
-            
+
             # Add missing attributes with defaults
             self.websocket_reconnect_attempts = 5
             self.websocket_timeout = 30
@@ -558,7 +581,7 @@ class ExchangeSettings:
             self.rate_limit_requests = config.rate_limits.requests_per_minute
             self.rate_limit_window_seconds = 60
             self.bluefin_network = config.network
-            
+
             # Add missing attributes with defaults
             self.websocket_reconnect_attempts = 5
             self.websocket_timeout = 30
@@ -585,7 +608,7 @@ class ExchangeSettings:
             self.rate_limit_requests = 10
             self.rate_limit_window_seconds = 60
             self.bluefin_network = "mainnet"
-            
+
             # Add missing attributes with defaults
             self.websocket_reconnect_attempts = 5
             self.websocket_timeout = 30
@@ -641,7 +664,9 @@ class ExchangeSettings:
             if private_key_str.startswith("suiprivkey"):
                 # Try to automatically convert the bech32 key using inline implementation
                 try:
-                    print("🔄 Bech32 format detected, attempting automatic conversion...")
+                    print(
+                        "🔄 Bech32 format detected, attempting automatic conversion..."
+                    )
                     converted_key = self._inline_bech32_to_hex(private_key_str)
                     if converted_key:
                         print("✅ Successfully converted bech32 to hex format")
@@ -700,10 +725,10 @@ class ExchangeSettings:
     def _inline_bech32_to_hex(self, bech32_key: str) -> str | None:
         """
         Inline bech32 to hex conversion to avoid circular imports.
-        
+
         Args:
             bech32_key: Private key in bech32 format
-            
+
         Returns:
             Hex private key string or None if conversion fails
         """
@@ -713,10 +738,10 @@ class ExchangeSettings:
 
             # Remove the 'suiprivkey1' prefix
             data_part = bech32_key[11:]  # Remove 'suiprivkey1' prefix
-            
+
             # Bech32 alphabet
             BECH32_ALPHABET = "023456789acdefghjklmnpqrstuvwxyz"
-            
+
             # Convert bech32 chars to 5-bit values
             data = []
             for char in data_part.lower():
@@ -724,46 +749,46 @@ class ExchangeSettings:
                     data.append(BECH32_ALPHABET.index(char))
                 else:
                     return None
-            
+
             # Convert from 5-bit to 8-bit bytes
             # Skip checksum validation for simplicity (last 6 chars are checksum)
             if len(data) < 6:  # Need at least checksum
                 return None
-                
+
             # Remove checksum (last 6 characters for bech32)
             payload = data[:-6]
-            
+
             # Convert 5-bit groups to bytes
             bits = 0
             value = 0
             result = []
-            
+
             for item in payload:
                 value = (value << 5) | item
                 bits += 5
-                
+
                 if bits >= 8:
-                    result.append((value >> (bits - 8)) & 0xff)
+                    result.append((value >> (bits - 8)) & 0xFF)
                     bits -= 8
-            
+
             # Handle remaining bits
             if bits > 0:
-                result.append((value << (8 - bits)) & 0xff)
-            
+                result.append((value << (8 - bits)) & 0xFF)
+
             # The result should be around 32 bytes for a private key
             if len(result) >= 32:
                 # Take first 32 bytes and convert to hex
                 private_key_bytes = bytes(result[:32])
                 hex_key = private_key_bytes.hex()
                 return f"0x{hex_key}"
-            elif len(result) >= 31:
+            if len(result) >= 31:
                 # Pad to 32 bytes if we have 31
-                padded_bytes = bytes(result) + b'\x00' * (32 - len(result))
+                padded_bytes = bytes(result) + b"\x00" * (32 - len(result))
                 hex_key = padded_bytes.hex()
                 return f"0x{hex_key}"
-            
+
             return None
-            
+
         except Exception:
             return None
 
@@ -772,7 +797,9 @@ class ExchangeSettings:
 class RiskSettings:
     """Risk management settings using functional types."""
 
-    def __init__(self, functional_config: Optional["SystemConfig"] = None, **kwargs):
+    def __init__(
+        self, functional_config: Optional["SystemConfig"] = None, **kwargs: Any
+    ) -> None:
         if functional_config:
             self._from_functional_config(functional_config)
         else:
@@ -803,7 +830,7 @@ class RiskSettings:
 class DataSettings:
     """Data management settings using functional types."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         # Maintain exact compatibility with environment variable loading
         self.keep_days: int = parse_int_env(
             "DATA__KEEP_DAYS", kwargs.get("keep_days", 30)
@@ -824,12 +851,33 @@ class DataSettings:
             "DATA__USE_REAL_DATA", kwargs.get("use_real_data", True)
         )
 
+        # Cipher B indicator settings
+        self.enable_cipher_b_filter: bool = parse_bool_env(
+            "DATA__ENABLE_CIPHER_B_FILTER", kwargs.get("enable_cipher_b_filter", True)
+        )
+        self.cipher_b_wave_bullish_threshold: float = parse_float_env(
+            "DATA__CIPHER_B_WAVE_BULLISH_THRESHOLD",
+            kwargs.get("cipher_b_wave_bullish_threshold", 0.0),
+        )
+        self.cipher_b_wave_bearish_threshold: float = parse_float_env(
+            "DATA__CIPHER_B_WAVE_BEARISH_THRESHOLD",
+            kwargs.get("cipher_b_wave_bearish_threshold", 0.0),
+        )
+        self.cipher_b_money_flow_bullish_threshold: float = parse_float_env(
+            "DATA__CIPHER_B_MONEY_FLOW_BULLISH_THRESHOLD",
+            kwargs.get("cipher_b_money_flow_bullish_threshold", 0.0),
+        )
+        self.cipher_b_money_flow_bearish_threshold: float = parse_float_env(
+            "DATA__CIPHER_B_MONEY_FLOW_BEARISH_THRESHOLD",
+            kwargs.get("cipher_b_money_flow_bearish_threshold", 0.0),
+        )
+
 
 @dataclass
 class DominanceSettings:
     """Market dominance settings using functional types."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         # Maintain exact compatibility with environment variable loading
         self.enabled: bool = parse_bool_env(
             "DOMINANCE__ENABLED", kwargs.get("enabled", False)
@@ -838,7 +886,8 @@ class DominanceSettings:
             "DOMINANCE__THRESHOLD", kwargs.get("threshold", 0.45)
         )
         self.enable_dominance_data: bool = parse_bool_env(
-            "DOMINANCE__ENABLE_DOMINANCE_DATA", kwargs.get("enable_dominance_data", False)
+            "DOMINANCE__ENABLE_DOMINANCE_DATA",
+            kwargs.get("enable_dominance_data", False),
         )
 
 
@@ -846,7 +895,9 @@ class DominanceSettings:
 class SystemSettings:
     """System configuration settings using functional types."""
 
-    def __init__(self, functional_config: Optional["SystemConfig"] = None, **kwargs):
+    def __init__(
+        self, functional_config: Optional["SystemConfig"] = None, **kwargs: Any
+    ) -> None:
         if functional_config:
             self._from_functional_config(functional_config)
         else:
@@ -856,11 +907,12 @@ class SystemSettings:
                 if kwargs.get("dry_run") is not None
                 else parse_bool_env("SYSTEM__DRY_RUN", True)
             )
-            self.environment: str = kwargs.get("environment") or os.getenv(
-                "SYSTEM__ENVIRONMENT", "development"
+            self.environment: str = str(
+                kwargs.get("environment")
+                or os.getenv("SYSTEM__ENVIRONMENT", "development")
             )
-            self.log_level: str = kwargs.get("log_level") or os.getenv(
-                "SYSTEM__LOG_LEVEL", "INFO"
+            self.log_level: str = str(
+                kwargs.get("log_level") or os.getenv("SYSTEM__LOG_LEVEL", "INFO")
             )
             self.update_frequency_seconds: float = parse_float_env(
                 "SYSTEM__UPDATE_FREQUENCY_SECONDS",
@@ -894,8 +946,9 @@ class SystemSettings:
                 "SYSTEM__LOG_TO_FILE",
                 kwargs.get("log_to_file", True),
             )
-            self.log_file_path: str = kwargs.get("log_file_path") or os.getenv(
-                "SYSTEM__LOG_FILE_PATH", "logs/bot.log"
+            self.log_file_path: str = str(
+                kwargs.get("log_file_path")
+                or os.getenv("SYSTEM__LOG_FILE_PATH", "logs/bot.log")
             )
             self.max_log_size_mb: int = int(
                 parse_float_env(
@@ -909,12 +962,16 @@ class SystemSettings:
                     kwargs.get("log_backup_count", 5),
                 )
             )
-            self.log_format: str = kwargs.get("log_format") or os.getenv(
-                "SYSTEM__LOG_FORMAT", "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+            self.log_format: str = str(
+                kwargs.get("log_format")
+                or os.getenv(
+                    "SYSTEM__LOG_FORMAT",
+                    "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                )
             )
             self.enable_websocket_publishing: bool = parse_bool_env(
                 "SYSTEM__ENABLE_WEBSOCKET_PUBLISHING",
-                kwargs.get("enable_websocket_publishing", False)
+                kwargs.get("enable_websocket_publishing", False),
             )
 
     def _from_functional_config(self, config: "SystemConfig") -> None:
@@ -932,7 +989,9 @@ class SystemSettings:
         self.log_file_path = "logs/bot.log"  # Default
         self.max_log_size_mb = 100  # Default
         self.log_backup_count = 5  # Default
-        self.log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"  # Default
+        self.log_format = (
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"  # Default
+        )
         self.enable_websocket_publishing = False  # Default
 
 
@@ -940,7 +999,9 @@ class SystemSettings:
 class PaperTradingSettings:
     """Paper trading settings using functional types."""
 
-    def __init__(self, functional_config: Optional["BacktestConfig"] = None, **kwargs):
+    def __init__(
+        self, functional_config: Optional["BacktestConfig"] = None, **kwargs: Any
+    ) -> None:
         if functional_config:
             self._from_functional_config(functional_config)
         else:
@@ -1000,7 +1061,9 @@ class PaperTradingSettings:
 class MonitoringSettings:
     """System monitoring settings using functional types."""
 
-    def __init__(self, functional_config: Optional["SystemConfig"] = None, **kwargs):
+    def __init__(
+        self, functional_config: Optional["SystemConfig"] = None, **kwargs: Any
+    ) -> None:
         if functional_config:
             self._from_functional_config(functional_config)
         else:
@@ -1022,7 +1085,9 @@ class MonitoringSettings:
 class MCPSettings:
     """MCP (Model Context Protocol) settings using functional types."""
 
-    def __init__(self, functional_config: Optional["SystemConfig"] = None, **kwargs):
+    def __init__(
+        self, functional_config: Optional["SystemConfig"] = None, **kwargs: Any
+    ) -> None:
         if functional_config:
             self._from_functional_config(functional_config)
         else:
@@ -1044,7 +1109,7 @@ class MCPSettings:
 class OrderbookSettings:
     """Orderbook configuration settings using functional types."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         # Maintain exact compatibility with environment variable loading
         self.depth_levels: int = parse_int_env(
             "MARKET_MAKING__ORDERBOOK__DEPTH_LEVELS", kwargs.get("depth_levels", 20)
@@ -1160,7 +1225,7 @@ class OrderbookSettings:
 class MarketMakingSettings:
     """Market making settings using functional types."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         # Maintain exact compatibility with environment variable loading
         self.enabled: bool = parse_bool_env(
             "MARKET_MAKING__ENABLED", kwargs.get("enabled", False)
@@ -1176,7 +1241,7 @@ class MarketMakingSettings:
         )
         self.order_refresh_interval_seconds: int = parse_int_env(
             "MARKET_MAKING__ORDER_REFRESH_INTERVAL_SECONDS",
-            kwargs.get("order_refresh_interval_seconds", 30)
+            kwargs.get("order_refresh_interval_seconds", 30),
         )
         self.min_profit_bps: int = parse_int_env(
             "MARKET_MAKING__MIN_PROFIT_BPS", kwargs.get("min_profit_bps", 5)
@@ -1185,18 +1250,62 @@ class MarketMakingSettings:
             "MARKET_MAKING__MAX_POSITION_SIZE", kwargs.get("max_position_size", 1000.0)
         )
         self.inventory_target_pct: float = parse_float_env(
-            "MARKET_MAKING__INVENTORY_TARGET_PCT", kwargs.get("inventory_target_pct", 50.0)
+            "MARKET_MAKING__INVENTORY_TARGET_PCT",
+            kwargs.get("inventory_target_pct", 50.0),
         )
         self.skew_factor: float = parse_float_env(
             "MARKET_MAKING__SKEW_FACTOR", kwargs.get("skew_factor", 0.1)
         )
+
+        # Add missing attributes used in main.py
+        self.symbol: str = os.getenv(
+            "MARKET_MAKING__SYMBOL", kwargs.get("symbol", "BTC-USD")
+        )
+        self.profile: str = os.getenv(
+            "MARKET_MAKING__PROFILE", kwargs.get("profile", "balanced")
+        )
+        self.cycle_interval_seconds: int = parse_int_env(
+            "MARKET_MAKING__CYCLE_INTERVAL_SECONDS",
+            kwargs.get("cycle_interval_seconds", 60),
+        )
+
+        # Strategy settings as a simple object with required attributes
+        class StrategySettings:
+            def __init__(self):
+                self.base_spread_bps: int = parse_int_env(
+                    "MARKET_MAKING__BASE_SPREAD_BPS", 10
+                )
+                self.order_levels: int = parse_int_env("MARKET_MAKING__ORDER_LEVELS", 3)
+                self.max_position_pct: float = parse_float_env(
+                    "MARKET_MAKING__MAX_POSITION_PCT", 25.0
+                )
+
+        self.strategy = StrategySettings()
+
+        # Risk settings as a simple object with required attributes
+        class RiskSettings:
+            def __init__(self):
+                self.max_position_value: float = parse_float_env(
+                    "MARKET_MAKING__MAX_POSITION_VALUE", 10000.0
+                )
+                self.max_inventory_imbalance: float = parse_float_env(
+                    "MARKET_MAKING__MAX_INVENTORY_IMBALANCE", 0.5
+                )
+                self.daily_loss_limit_pct: float = parse_float_env(
+                    "MARKET_MAKING__DAILY_LOSS_LIMIT_PCT", 5.0
+                )
+                self.stop_loss_pct: float = parse_float_env(
+                    "MARKET_MAKING__STOP_LOSS_PCT", 2.0
+                )
+
+        self.risk = RiskSettings()
 
 
 @dataclass
 class OmniSearchSettings:
     """OmniSearch integration settings using functional types."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         # Maintain exact compatibility with environment variable loading
         self.enabled: bool = parse_bool_env(
             "OMNISEARCH__ENABLED", kwargs.get("enabled", False)
@@ -1265,7 +1374,9 @@ class Settings:
             )
             self.mcp = MCPSettings(functional_config.system, **overrides.get("mcp", {}))
             self.orderbook = OrderbookSettings(**overrides.get("orderbook", {}))
-            self.market_making = MarketMakingSettings(**overrides.get("market_making", {}))
+            self.market_making = MarketMakingSettings(
+                **overrides.get("market_making", {})
+            )
             self.omnisearch = OmniSearchSettings(**overrides.get("omnisearch", {}))
         else:
             # Fallback to environment/kwargs based initialization
@@ -1282,12 +1393,14 @@ class Settings:
             self.monitoring = MonitoringSettings(**overrides.get("monitoring", {}))
             self.mcp = MCPSettings(**overrides.get("mcp", {}))
             self.orderbook = OrderbookSettings(**overrides.get("orderbook", {}))
-            self.market_making = MarketMakingSettings(**overrides.get("market_making", {}))
+            self.market_making = MarketMakingSettings(
+                **overrides.get("market_making", {})
+            )
             self.omnisearch = OmniSearchSettings(**overrides.get("omnisearch", {}))
 
         # Store functional config for advanced use cases
         self._functional_config = functional_config
-        
+
         # Set default profile
         self.profile = TradingProfile.BALANCED
 
@@ -1302,16 +1415,16 @@ class Settings:
                 profile_enum = TradingProfile.BALANCED
         else:
             profile_enum = profile
-            
+
         # Load profile-specific overrides and create new Settings instance
         profile_overrides = self._load_profile_overrides(profile_enum.value)
         new_settings = Settings(self._functional_config, **profile_overrides)
         new_settings.profile = profile_enum
         return new_settings
 
-    def _load_profile_overrides(self, profile: str) -> dict[str, Any]:
+    def _load_profile_overrides(self, profile: str) -> dict[str, Any]:  # type: ignore[misc]
         """Load profile-specific configuration overrides."""
-        profile_configs = {
+        profile_configs: dict[str, dict[str, Any]] = {  # type: ignore[misc]
             "conservative": {
                 "trading": {"leverage": 2, "max_size_pct": 10.0},
                 "risk": {"max_daily_loss_pct": 2.0, "max_concurrent_trades": 1},
@@ -1336,9 +1449,9 @@ class Settings:
         results = validator.run_comprehensive_validation()
         return results.get("warnings", [])
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:  # type: ignore[misc]
         """Convert settings to dictionary."""
-        return {
+        return {  # type: ignore[misc]
             "trading": self.trading.__dict__,
             "llm": self.llm.__dict__,
             "exchange": self.exchange.__dict__,
@@ -1357,7 +1470,7 @@ class Settings:
 
 def create_settings(
     env_file: str | None = None,
-    overrides: dict[str, Any] | None = None,
+    overrides: dict[str, Any] | None = None,  # type: ignore[misc]
     profile: str | None = None,
 ) -> Settings:
     """Create settings instance with functional programming backend."""
@@ -1423,14 +1536,14 @@ def load_settings_from_file(file_path: str | Path) -> Settings:
         return create_settings()
 
 
-def _create_functional_config_from_dict(config_data: dict[str, Any]) -> Any:
+def _create_functional_config_from_dict(config_data: dict[str, Any]) -> Any:  # type: ignore[misc]
     """Create functional configuration from dictionary data."""
     try:
         # Set environment variables temporarily for functional config builders
         original_env = {}
 
         # Map config data to environment variables
-        env_mapping = {
+        env_mapping: dict[str, str] = {  # type: ignore[misc]
             # Trading settings
             "TRADING_PAIRS": config_data.get("trading", {}).get("symbol", "BTC-USD"),
             "TRADING_INTERVAL": config_data.get("trading", {}).get("interval", "1m"),
@@ -1495,10 +1608,10 @@ def save_settings_to_file(settings: Settings, file_path: str | Path) -> None:
     """Save settings to a configuration file."""
     file_path = Path(file_path)
     file_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     config_data = settings.to_dict()
-    
-    with open(file_path, 'w') as f:
+
+    with open(file_path, "w") as f:
         json.dump(config_data, f, indent=2, default=str)
 
 
@@ -1645,9 +1758,9 @@ def get_functional_config() -> Optional["FunctionalConfig"]:
     return None
 
 
-def get_config_template() -> dict[str, Any]:
+def get_config_template() -> dict[str, Any]:  # type: ignore[misc]
     """Get a configuration template with descriptions."""
-    return {
+    return {  # type: ignore[misc]
         "trading": {
             "symbol": "BTC-USD",
             "interval": "5m",
@@ -1766,8 +1879,8 @@ __all__ = [
     "Environment",
     "ExchangeSettings",
     "LLMSettings",
-    "MarketMakingSettings",
     "MCPSettings",
+    "MarketMakingSettings",
     "MonitoringSettings",
     "OmniSearchSettings",
     "OrderbookSettings",

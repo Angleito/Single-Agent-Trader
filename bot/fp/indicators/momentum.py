@@ -429,9 +429,9 @@ def calculate_all_momentum_indicators(
     if timestamp is None:
         timestamp = datetime.now(UTC)
 
-    results: dict[str, RSIResult | MACDResult | StochasticResult | ROCResult | None] = (
-        {}
-    )
+    results: dict[
+        str, RSIResult | MACDResult | StochasticResult | ROCResult | None
+    ] = {}
 
     # Calculate RSI
     results["rsi"] = rsi(prices, rsi_period, timestamp)

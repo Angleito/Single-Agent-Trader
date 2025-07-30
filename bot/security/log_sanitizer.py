@@ -188,7 +188,9 @@ class LogSanitizer:
                     (
                         self.sanitize_dict(item, depth - 1)
                         if isinstance(item, dict)
-                        else self.sanitize(str(item)) if isinstance(item, str) else item
+                        else self.sanitize(str(item))
+                        if isinstance(item, str)
+                        else item
                     )
                     for item in value
                 ]

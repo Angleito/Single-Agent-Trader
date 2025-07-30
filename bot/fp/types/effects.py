@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 
 T = TypeVar("T")
 U = TypeVar("U")
+V = TypeVar("V")
 E = TypeVar("E")
 F = TypeVar("F")
 

@@ -3,6 +3,7 @@
 import ctypes
 import os
 import platform
+from typing import Any, Literal
 
 
 class SecureString:  # noqa: PLW1641
@@ -35,7 +36,7 @@ class SecureString:  # noqa: PLW1641
         # Try to lock memory pages (requires appropriate permissions)
         self._lock_memory()
 
-    def _lock_memory(self):
+    def _lock_memory(self) -> None:
         """Attempt to lock memory pages to prevent swapping to disk."""
         if platform.system() == "Linux":
             try:
@@ -48,7 +49,7 @@ class SecureString:  # noqa: PLW1641
                 # If mlock fails (usually due to permissions), continue without it
                 pass
 
-    def _unlock_memory(self):
+    def _unlock_memory(self) -> None:
         """Unlock memory pages."""
         if platform.system() == "Linux":
             try:
@@ -59,7 +60,7 @@ class SecureString:  # noqa: PLW1641
             except Exception:  # noqa: S110
                 pass
 
-    def _zero_memory(self):
+    def _zero_memory(self) -> None:
         """Overwrite the memory with zeros."""
         if hasattr(self, "_data") and self._data:
             # Multiple overwrites with different patterns for security
@@ -126,7 +127,7 @@ class SecureString:  # noqa: PLW1641
         """Return a masked representation."""
         return f"<SecureString length={self._length}>"
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: object) -> bool:
         """Constant-time comparison to prevent timing attacks."""
         if not isinstance(other, (SecureString, str, bytes)):
             return False
@@ -152,7 +153,7 @@ class SecureString:  # noqa: PLW1641
 
     def __bool__(self) -> bool:
         """Return True if the SecureString contains data."""
-        return hasattr(self, "_data") and self._data and len(self._data) > 0
+        return bool(hasattr(self, "_data") and self._data and len(self._data) > 0)
 
     def __len__(self) -> int:
         """Return the length of the stored data."""
@@ -160,7 +161,7 @@ class SecureString:  # noqa: PLW1641
             return 0
         return self._length
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Securely clean up the sensitive data."""
         try:
             self._unlock_memory()
@@ -172,11 +173,11 @@ class SecureString:  # noqa: PLW1641
             # Ensure cleanup doesn't raise exceptions during gc
             pass
 
-    def __enter__(self):
+    def __enter__(self) -> 'SecureString':
         """Context manager support."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: Any) -> Literal[False]:
         """Ensure cleanup on context exit."""
         self._zero_memory()
         return False

@@ -25,7 +25,6 @@ try:
         batch_convert_market_data,
         convert_price_optimized,
         format_price_for_display,
-        get_precision_manager,
     )
 
     PRECISION_MANAGER_AVAILABLE = True
@@ -195,9 +194,9 @@ class BluefinWebSocketClient:
         # Subscription tracking
         self._subscribed_channels: set[str] = set()
         self._subscription_id = 1
-        self._pending_subscriptions: dict[int, str] = (
-            {}
-        )  # Track pending subscription requests
+        self._pending_subscriptions: dict[
+            int, str
+        ] = {}  # Track pending subscription requests
 
         # Tasks
         self._connection_task: asyncio.Task | None = None
@@ -226,12 +225,12 @@ class BluefinWebSocketClient:
         self._rate_limit_invalid_messages = 10
 
         # Orderbook state management
-        self._orderbook_bids: dict[str, dict[str, Any]] = (
-            {}
-        )  # price -> {size, timestamp}
-        self._orderbook_asks: dict[str, dict[str, Any]] = (
-            {}
-        )  # price -> {size, timestamp}
+        self._orderbook_bids: dict[
+            str, dict[str, Any]
+        ] = {}  # price -> {size, timestamp}
+        self._orderbook_asks: dict[
+            str, dict[str, Any]
+        ] = {}  # price -> {size, timestamp}
         self._orderbook_snapshot_received = False
         self._last_orderbook_update: datetime | None = None
 

@@ -549,7 +549,9 @@ class HighPerformanceMonitor:
         status = (
             "healthy"
             if health_score > 0.7
-            else "degraded" if health_score > 0.3 else "unhealthy"
+            else "degraded"
+            if health_score > 0.3
+            else "unhealthy"
         )
 
         health_data = {

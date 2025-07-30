@@ -32,15 +32,14 @@ def create_market_data_provider(
     """
     # Use settings if not provided
     exchange_type = exchange_type or settings.exchange.exchange_type
-    
+
     if exchange_type == "coinbase":
         logger.info("Creating Coinbase market data provider")
         return CoinbaseMarketDataProvider(symbol=symbol, interval=interval)
-    elif exchange_type == "bluefin":
+    if exchange_type == "bluefin":
         logger.info("Creating Bluefin market data provider")
         return BluefinMarketDataProvider(symbol=symbol, interval=interval)
-    else:
-        raise ValueError(f"Unsupported exchange type: {exchange_type}")
+    raise ValueError(f"Unsupported exchange type: {exchange_type}")
 
 
 # Legacy alias for backward compatibility

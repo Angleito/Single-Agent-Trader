@@ -4135,9 +4135,9 @@ async def performance_metrics(_request):
 
         # Performance metrics
         if hasattr(service, "_avg_response_time"):
-            metrics_data["performance"][
-                "avg_response_time_ms"
-            ] = service._avg_response_time
+            metrics_data["performance"]["avg_response_time_ms"] = (
+                service._avg_response_time
+            )
 
         # Resource metrics (if available)
         try:
@@ -4163,9 +4163,9 @@ async def performance_metrics(_request):
                 "available_memory_gb": psutil.virtual_memory().available / (1024**3),
             }
         except ImportError:
-            metrics_data["resources"][
-                "note"
-            ] = "psutil not available for detailed metrics"
+            metrics_data["resources"]["note"] = (
+                "psutil not available for detailed metrics"
+            )
 
         # Rate limiting metrics
         current_time = time.time()
@@ -4388,9 +4388,9 @@ async def service_diagnostics(_request):
                 diagnostics_data["recommendations"].append("High CPU usage detected")
 
         except ImportError:
-            perf_check["details"][
-                "note"
-            ] = "psutil not available for performance metrics"
+            perf_check["details"]["note"] = (
+                "psutil not available for performance metrics"
+            )
 
         diagnostics_data["checks"]["performance"] = perf_check
 

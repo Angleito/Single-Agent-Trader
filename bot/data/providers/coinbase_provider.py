@@ -7,7 +7,6 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any, NoReturn
 
-import aiohttp
 import websockets
 
 from bot.config import settings
@@ -21,15 +20,14 @@ def _extract_secret_value(secret_obj) -> str | None:
     """Safely extract secret value from SecretStr or SecureString objects."""
     if secret_obj is None:
         return None
-    if hasattr(secret_obj, 'get_secret_value'):
+    if hasattr(secret_obj, "get_secret_value"):
         # Pydantic SecretStr
         return secret_obj.get_secret_value()
-    elif hasattr(secret_obj, 'get_value'):
+    if hasattr(secret_obj, "get_value"):
         # SecureString
         return secret_obj.get_value()
-    else:
-        # Fallback to string conversion
-        return str(secret_obj)
+    # Fallback to string conversion
+    return str(secret_obj)
 
 
 class MarketDataAPIError(Exception):

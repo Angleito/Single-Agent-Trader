@@ -1,4 +1,4 @@
 #!/bin/sh
-# Simplified entrypoint for legacy Docker compatibility
+# Simplified entrypoint for system Python (no virtual environment)
 echo "Starting AI Trading Bot..."
-exec /app/.venv/bin/python -m bot.main "$@"
+exec python -m bot.main "$@"

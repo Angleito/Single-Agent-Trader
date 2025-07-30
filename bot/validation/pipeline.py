@@ -27,10 +27,13 @@ from bot.fp.core.functional_validation import (
 )
 from bot.validation.data_integrity import FunctionalIntegrityValidator, IntegrityLevel
 
-# Type variables
+# Type variables with constraints
 T = TypeVar("T")
 U = TypeVar("U")
-E = TypeVar("E")
+E = TypeVar("E", bound=Exception)
+DataType = TypeVar("DataType")
+ErrorType = TypeVar("ErrorType", bound=ValidatorError)
+ValidationResult = TypeVar("ValidationResult")
 
 
 class PipelineStage(Enum):
@@ -60,14 +63,14 @@ class PipelineStep:
 
     name: str
     stage: PipelineStage
-    validator: Callable[[Any], FPResult[Any, ValidatorError]]
+    validator: Callable[[DataType], FPResult[DataType, ValidatorError]]
     description: str = ""
     optional: bool = False
     dependencies: list[str] = field(default_factory=list)
     timeout_seconds: float | None = None
     retry_count: int = 0
 
-    def execute(self, data: Any) -> FPResult[Any, ValidatorError]:
+    def execute(self, data: DataType) -> FPResult[DataType, ValidatorError]:
         """Execute this pipeline step."""
         try:
             return self.validator(data)
@@ -121,7 +124,7 @@ class PipelineResult:
 
     def get_errors_by_stage(self) -> dict[PipelineStage, list[ValidatorError]]:
         """Group errors by pipeline stage."""
-        error_map = {}
+        error_map: dict[PipelineStage, list[ValidatorError]] = {}
         for error in self.errors:
             if isinstance(error, FieldError) and "stage" in error.context:
                 stage_name = error.context["stage"]
@@ -143,17 +146,17 @@ class FunctionalValidationPipeline:
         self,
         name: str = "validation_pipeline",
         mode: ExecutionMode = ExecutionMode.SEQUENTIAL,
-    ):
+    ) -> None:
         self.name = name
         self.mode = mode
         self.steps: list[PipelineStep] = []
-        self.conditional_steps: dict[str, Callable[[Any], bool]] = {}
+        self.conditional_steps: dict[str, Callable[[DataType], bool]] = {}
         self.parallel_groups: list[list[str]] = []
 
     def add_step(
         self,
         name: str,
-        validator: Callable[[Any], FPResult[Any, ValidatorError]],
+        validator: Callable[[DataType], FPResult[DataType, ValidatorError]],
         stage: PipelineStage = PipelineStage.BUSINESS_RULES,
         description: str = "",
         optional: bool = False,
@@ -182,14 +185,14 @@ class FunctionalValidationPipeline:
     def add_conditional_step(
         self,
         name: str,
-        validator: Callable[[Any], FPResult[Any, ValidatorError]],
-        condition: Callable[[Any], bool],
+        validator: Callable[[DataType], FPResult[DataType, ValidatorError]],
+        condition: Callable[[DataType], bool],
         stage: PipelineStage = PipelineStage.BUSINESS_RULES,
         description: str = "",
     ) -> "FunctionalValidationPipeline":
         """Add a conditional validation step."""
 
-        def conditional_validator(data: Any) -> FPResult[Any, ValidatorError]:
+        def conditional_validator(data: DataType) -> FPResult[DataType, ValidatorError]:
             if condition(data):
                 return validator(data)
             return FPSuccess(data)
@@ -254,7 +257,7 @@ class FunctionalValidationPipeline:
 
         # Calculate metrics
         execution_time = (datetime.now() - start_time).total_seconds() * 1000
-        error_count_by_stage = {}
+        error_count_by_stage: dict[str, int] = {}
 
         for error in errors:
             if isinstance(error, FieldError) and "stage" in error.context:
@@ -329,11 +332,15 @@ class FunctionalValidationPipeline:
                 step_timings[step_name] = stage_time / len(stage_steps)
 
                 if result.is_success():
-                    current_data = result.success()
+                    success_value = result.success()
+                    if success_value is not None:
+                        current_data = success_value
                     successful_steps += 1
                     execution_path.append(step_name)
                 else:
-                    errors.append(result.failure())
+                    failure_value = result.failure()
+                    if failure_value is not None:
+                        errors.append(failure_value)
                     stage_success = False
 
             # Fail fast if configured
@@ -342,7 +349,7 @@ class FunctionalValidationPipeline:
 
         # Calculate metrics
         execution_time = (datetime.now() - start_time).total_seconds() * 1000
-        error_count_by_stage = {}
+        error_count_by_stage: dict[str, int] = {}
 
         for error in errors:
             if isinstance(error, FieldError) and "stage" in error.context:
@@ -371,7 +378,7 @@ class FunctionalValidationPipeline:
 
     def _group_steps_by_stage(self) -> dict[PipelineStage, list[PipelineStep]]:
         """Group pipeline steps by stage."""
-        stages = {}
+        stages: dict[PipelineStage, list[PipelineStep]] = {}
 
         for step in self.steps:
             if step.stage not in stages:
@@ -379,7 +386,7 @@ class FunctionalValidationPipeline:
             stages[step.stage].append(step)
 
         # Return stages in execution order
-        ordered_stages = {}
+        ordered_stages: dict[PipelineStage, list[PipelineStep]] = {}
         for stage in PipelineStage:
             if stage in stages:
                 ordered_stages[stage] = stages[stage]
@@ -412,7 +419,9 @@ class FunctionalValidationPipeline:
             result = step.execute(current_data)
 
             if result.is_success():
-                current_data = result.success()
+                success_value = result.success()
+                if success_value is not None:
+                    current_data = success_value
                 execution_path.append(step.name)
             else:
                 error = result.failure()
@@ -456,12 +465,13 @@ class FunctionalValidationPipeline:
                         execution_path.append(step.name)
                     else:
                         error = result.failure()
-                        if step.optional:
-                            warnings.append(
-                                f"Optional step '{step.name}' failed: {error}"
-                            )
-                        else:
-                            errors.append(error)
+                        if error is not None:
+                            if step.optional:
+                                warnings.append(
+                                    f"Optional step '{step.name}' failed: {error}"
+                                )
+                            else:
+                                errors.append(error)
 
                 except Exception as e:
                     errors.append(
@@ -482,8 +492,8 @@ class FunctionalValidationPipeline:
         )
 
     async def _execute_step_async(
-        self, step: PipelineStep, data: Any
-    ) -> FPResult[Any, ValidatorError]:
+        self, step: PipelineStep, data: DataType
+    ) -> FPResult[DataType, ValidatorError]:
         """Execute a single step asynchronously."""
         try:
             # Apply timeout if specified
@@ -578,7 +588,16 @@ def create_trade_action_pipeline() -> FunctionalValidationPipeline:
     ) -> FPResult[dict[str, Any], ValidatorError]:
         result = integrity_validator.validate_data(data)
         if result.is_failure():
-            return FPFailure(result.failure())
+            failure_value = result.failure()
+            if failure_value is not None:
+                return FPFailure(failure_value)
+            return FPFailure(
+                FieldError(
+                    field="integrity_check",
+                    message="Unknown integrity check failure",
+                    validation_rule="integrity_error",
+                )
+            )
         return FPSuccess(data)
 
     return (

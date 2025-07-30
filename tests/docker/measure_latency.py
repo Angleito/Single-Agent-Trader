@@ -14,8 +14,9 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import docker
 import websockets
+
+import docker
 
 # Configure logging
 logging.basicConfig(

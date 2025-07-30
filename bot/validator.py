@@ -506,7 +506,19 @@ class TradeValidator:
                 # Log detailed error information
                 error_summary = []
                 for error in pipeline_result.errors:
-                    error_summary.append(f"{error.field}: {error.message}")
+                    # Handle different error types appropriately
+                    if hasattr(error, "field"):
+                        # FieldError - has field attribute
+                        error_summary.append(f"{error.field}: {error.message}")
+                    elif hasattr(error, "errors") and hasattr(error, "schema"):
+                        # SchemaError - iterate through individual field errors
+                        for field_error in error.errors:
+                            error_summary.append(
+                                f"{field_error.field}: {field_error.message}"
+                            )
+                    else:
+                        # Other error types - use string representation
+                        error_summary.append(str(error))
 
                 logger.warning(
                     "Functional validation failed: %s (execution_path: %s)",

@@ -28,19 +28,14 @@ except ImportError:
 if TYPE_CHECKING:
     # Type hints only - import for static analysis
     from langchain_core.callbacks import BaseCallbackHandler
-    from langchain_core.messages import HumanMessage
     from langchain_core.outputs import LLMResult
 elif LANGCHAIN_AVAILABLE:
     from langchain_core.callbacks import BaseCallbackHandler
-    from langchain_core.messages import HumanMessage
     from langchain_core.outputs import LLMResult
 else:
     # Graceful degradation when LangChain is not available
     class BaseCallbackHandler:
         """Dummy BaseCallbackHandler for when LangChain is unavailable."""
-
-    class HumanMessage:
-        """Dummy HumanMessage for when LangChain is unavailable."""
 
     class LLMResult:
         """Dummy LLMResult for when LangChain is unavailable."""

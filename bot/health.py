@@ -335,7 +335,11 @@ class HealthMonitor:
     def _check_system_health(self) -> dict[str, Any]:
         """Check system resource health."""
         if psutil is None:
-            return {"status": "warning", "issues": ["psutil not available"], "metrics": {}}
+            return {
+                "status": "warning",
+                "issues": ["psutil not available"],
+                "metrics": {},
+            }
 
         try:
             # Get system metrics
@@ -398,12 +402,12 @@ class HealthMonitor:
     def _check_filesystem_health(self) -> dict[str, Any]:
         """Check filesystem health."""
         issues = []
-        
+
         # Check data directory
         data_path = Path(self.settings.data.data_storage_path)
         if not self._check_directory_permissions(data_path):
             issues.append(f"Cannot write to data directory: {data_path}")
-        
+
         # Check logs directory
         try:
             log_dir = get_logs_directory()

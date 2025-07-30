@@ -16,23 +16,23 @@ from decimal import Decimal
 from typing import Any, Literal, cast
 
 
-def _extract_secret_value(secret_obj) -> str | None:
+def _extract_secret_value(secret_obj: Any) -> str | None:
     """Safely extract secret value from SecretStr or SecureString objects."""
     if secret_obj is None:
         return None
-    if hasattr(secret_obj, 'get_secret_value'):
+    if hasattr(secret_obj, "get_secret_value"):
         # Pydantic SecretStr
-        return secret_obj.get_secret_value()
-    elif hasattr(secret_obj, 'get_value'):
+        return secret_obj.get_secret_value()  # type: ignore[no-any-return]
+    if hasattr(secret_obj, "get_value"):
         # SecureString
-        return secret_obj.get_value()
-    else:
-        # Fallback to string conversion
-        return str(secret_obj)
+        return secret_obj.get_value()  # type: ignore[no-any-return]
+    # Fallback to string conversion
+    return str(secret_obj)
+
 
 try:
     # Prefer the new official SDK import path first
-    from coinbase.rest import RESTClient as _BaseClient
+    from coinbase.rest import RESTClient as _BaseClient  # type: ignore[import-untyped]
 
     # Use standard exceptions since SDK doesn't export specific ones
     class CoinbaseAPIError(Exception):
@@ -44,18 +44,18 @@ try:
     class CoinbaseConnectionError(Exception):
         pass
 
-    class CoinbaseAdvancedTrader(_BaseClient):
+    class CoinbaseAdvancedTrader(_BaseClient):  # type: ignore[misc]
         """Adapter class exposing legacy method names used in this codebase."""
 
         # Legacy CFM helper names used in the code
-        def get_fcm_balance_summary(self, **kwargs):
+        def get_fcm_balance_summary(self, **kwargs: Any) -> Any:
             return self.get_futures_balance_summary(**kwargs)
 
-        def get_fcm_positions(self, **kwargs):
+        def get_fcm_positions(self, **kwargs: Any) -> Any:
             return self.list_futures_positions(**kwargs)
 
         # Override get_accounts to return a dict similar to legacy SDK
-        def get_accounts(self, *args, **kwargs):  # type: ignore[override]
+        def get_accounts(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
             resp = super().get_accounts(*args, **kwargs)
             if isinstance(resp, dict):
                 return resp
@@ -103,16 +103,16 @@ except ImportError:
     except ImportError:  # pragma: no cover
         # Mock classes for when *no* Coinbase SDK is installed
         class CoinbaseAdvancedTrader:  # type: ignore[misc]
-            def __init__(self, **kwargs):
+            def __init__(self, **kwargs: Any) -> None:
                 pass
 
-        class CoinbaseAPIError(Exception):  # type: ignore[no-redef]
+        class CoinbaseAPIError(Exception):
             pass
 
-        class CoinbaseConnectionError(Exception):  # type: ignore[no-redef]
+        class CoinbaseConnectionError(Exception):
             pass
 
-        class CoinbaseAuthenticationError(Exception):  # type: ignore[no-redef]
+        class CoinbaseAuthenticationError(Exception):
             pass
 
         COINBASE_AVAILABLE = False
@@ -545,7 +545,9 @@ class CoinbaseResponseValidator:
         else:
             return True
 
-    def validate_order_creation_response(self, response: dict | object) -> bool:
+    def validate_order_creation_response(
+        self, response: dict[str, Any] | object
+    ) -> bool:
         """
         Validate order creation response.
 
@@ -564,8 +566,10 @@ class CoinbaseResponseValidator:
                 if self.failure_callback:
                     self.failure_callback(
                         "order_response_validation",
-                        "Order creation response validation failed",
-                        "medium",
+                        {
+                            "error": "Order creation response validation failed",
+                            "severity": "medium",
+                        },
                     )
                 return False
 
@@ -594,8 +598,10 @@ class CoinbaseResponseValidator:
                 if self.failure_callback:
                     self.failure_callback(
                         "missing_order_id",
-                        "Order creation response missing order_id",
-                        "high",
+                        {
+                            "error": "Order creation response missing order_id",
+                            "severity": "high",
+                        },
                     )
                 return False
 
@@ -606,7 +612,9 @@ class CoinbaseResponseValidator:
         else:
             return True
 
-    def validate_order_cancellation_response(self, response: dict | object) -> bool:
+    def validate_order_cancellation_response(
+        self, response: dict[str, Any] | object
+    ) -> bool:
         """
         Validate order cancellation response.
 
@@ -719,23 +727,35 @@ class CoinbaseClient(BaseExchange):
         provided_cdp = all([cdp_api_key_name, cdp_private_key])
 
         # Get credentials from settings if not explicitly provided
+        cb_api_key_val = _extract_secret_value(settings.exchange.cb_api_key)
+        cb_api_secret_val = _extract_secret_value(settings.exchange.cb_api_secret)
+        cb_passphrase_val = _extract_secret_value(settings.exchange.cb_passphrase)
+
         settings_legacy = all(
             [
                 settings.exchange.cb_api_key
-                and _extract_secret_value(settings.exchange.cb_api_key).strip(),
+                and cb_api_key_val is not None
+                and cb_api_key_val.strip(),
                 settings.exchange.cb_api_secret
-                and _extract_secret_value(settings.exchange.cb_api_secret).strip(),
+                and cb_api_secret_val is not None
+                and cb_api_secret_val.strip(),
                 settings.exchange.cb_passphrase
-                and _extract_secret_value(settings.exchange.cb_passphrase).strip(),
+                and cb_passphrase_val is not None
+                and cb_passphrase_val.strip(),
             ]
         )
+
+        cdp_api_key_name_val = _extract_secret_value(settings.exchange.cdp_api_key_name)
+        cdp_private_key_val = _extract_secret_value(settings.exchange.cdp_private_key)
 
         settings_cdp = all(
             [
                 settings.exchange.cdp_api_key_name
-                and _extract_secret_value(settings.exchange.cdp_api_key_name).strip(),
+                and cdp_api_key_name_val is not None
+                and cdp_api_key_name_val.strip(),
                 settings.exchange.cdp_private_key
-                and _extract_secret_value(settings.exchange.cdp_private_key).strip(),
+                and cdp_private_key_val is not None
+                and cdp_private_key_val.strip(),
             ]
         )
 

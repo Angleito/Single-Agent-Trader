@@ -74,40 +74,42 @@ ENV POETRY_HOME="/opt/poetry" \
 # Set working directory early for consistency
 WORKDIR /app
 
-# Install Poetry with error handling and optimized caching
-RUN curl -sSL https://install.python-poetry.org | python3 - --version=${POETRY_VERSION} \
-    && ln -s /opt/poetry/bin/poetry /usr/local/bin/poetry \
-    && poetry --version
-
-ENV PATH="$POETRY_HOME/bin:$PATH"
+# Install uv for faster dependency management
+RUN pip install uv
 
 # Copy dependency files first for better layer caching
-COPY pyproject.toml poetry.lock* ./
+COPY pyproject.toml ./
 
-# Configure Poetry for optimal performance and caching
-RUN echo "Configuring Poetry for optimized Alpine environment..." \
-    && poetry config virtualenvs.create true \
-    && poetry config virtualenvs.in-project true \
-    && poetry config cache-dir $POETRY_CACHE_DIR \
-    && poetry config installer.parallel true \
-    && poetry config installer.max-workers 10 \
-    && poetry config virtualenvs.path $POETRY_VIRTUALENVS_PATH \
-    && echo "Poetry configured successfully"
+# Install dependencies directly to system Python (no virtual environment)
+RUN echo "Installing dependencies with uv..." \
+    && uv pip install --system \
+        aiofiles>=24.1.0 \
+        aiohttp>=3.12.15 \
+        asyncio>=3.4.3 \
+        click>=8.2.1 \
+        cryptography>=45.0.5 \
+        cython>=3.1.2 \
+        langchain>=0.3.27 \
+        langchain-openai>=0.3.28 \
+        numpy>=1.26.4 \
+        openai>=1.97.1 \
+        pandas>=2.3.1 \
+        pandas-ta>=0.3.14b0 \
+        psutil>=7.0.0 \
+        pydantic>=2.11.7 \
+        pydantic-settings>=2.10.1 \
+        python-dotenv>=1.1.1 \
+        requests>=2.32.4 \
+        rich>=14.1.0 \
+        setuptools>=75.9.1 \
+        websockets>=15.0.1 \
+        wheel>=0.45.1 \
+    && echo "Dependencies installed successfully"
 
-# Install dependencies without BuildKit cache mount for legacy Docker
-RUN echo "Installing dependencies..." \
-    && (poetry install --only=main --no-root --no-dev || \
-        (echo "Lock file out of sync, regenerating for Alpine..." && \
-         poetry lock --no-update && \
-         poetry install --only=main --no-root --no-dev)) \
-    && echo "Verifying virtual environment..." \
-    && ls -la /app/.venv/lib/python*/site-packages/ \
-    && echo "Poetry installation completed successfully"
-
-# Clean up Poetry cache in final build step (keeping Docker layer cache)
+# Clean up build artifacts for smaller image size
 RUN echo "Cleaning up build artifacts..." \
-    && find /app/.venv -name "*.pyc" -delete \
-    && find /app/.venv -name "__pycache__" -type d -exec rm -rf {} + || true \
+    && find /usr/local/lib/python*/site-packages -name "*.pyc" -delete \
+    && find /usr/local/lib/python*/site-packages -name "__pycache__" -type d -exec rm -rf {} + || true \
     && echo "Build artifacts cleaned up"
 
 # Note: bluefin-v2-client can be installed at runtime if live trading is needed
@@ -179,14 +181,15 @@ RUN addgroup -g ${GROUP_ID} botuser && \
 # Set consistent working directory
 WORKDIR /app
 
-# Copy virtual environment from builder with proper ownership
-COPY --from=builder --chown=${USER_ID}:${GROUP_ID} /app/.venv /app/.venv
+# Copy Python packages from builder (system installation, no virtual environment)
+COPY --from=builder --chown=${USER_ID}:${GROUP_ID} /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=builder --chown=${USER_ID}:${GROUP_ID} /usr/local/bin /usr/local/bin
 
-# Verify virtual environment activation works properly
-RUN echo "Testing virtual environment activation..." \
-    && /app/.venv/bin/python --version \
-    && /app/.venv/bin/pip list \
-    && echo "Virtual environment verification completed"
+# Verify Python installation works properly
+RUN echo "Testing Python installation..." \
+    && python --version \
+    && pip list \
+    && echo "Python installation verification completed"
 
 # Copy application code with proper ownership
 COPY --chown=${USER_ID}:${GROUP_ID} bot/ ./bot/
@@ -240,11 +243,11 @@ RUN chmod +x /app/healthcheck.sh
 COPY --chown=${USER_ID}:${GROUP_ID} scripts/docker-entrypoint-simple.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
-# Final verification of virtual environment before user switch
+# Final verification of Python installation before user switch
 RUN echo "Final verification before switching to non-root user..." \
-    && test -x /app/.venv/bin/python \
-    && /app/.venv/bin/python -c "import sys; print(f'Python {sys.version} ready')" \
-    && echo "✅ Python virtual environment verified"
+    && test -x /usr/local/bin/python \
+    && python -c "import sys; print(f'Python {sys.version} ready')" \
+    && echo "✅ Python installation verified"
 
 # Switch to non-root user with Alpine compatibility
 USER ${USER_ID}:${GROUP_ID}
@@ -259,8 +262,8 @@ EXPOSE 8080
 # Set entrypoint to initialization script
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
 
-# Default command - starts in safe dry-run mode with explicit Python path
-CMD ["/app/.venv/bin/python", "-m", "bot.main", "live", "--dry-run"]
+# Default command - starts in safe dry-run mode with system Python
+CMD ["live", "--dry-run"]
 
 # Alpine deployment optimized labels with FP support
 LABEL org.opencontainers.image.title="AI Trading Bot with Functional Programming Runtime" \

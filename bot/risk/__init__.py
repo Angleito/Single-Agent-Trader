@@ -722,9 +722,14 @@ class RiskManager:
 
             # Check position age
             if position.timestamp:
-                age_hours = (
-                    datetime.now(UTC) - position.timestamp.replace(tzinfo=None)
-                ).total_seconds() / 3600
+                # Ensure position timestamp is timezone-aware (in UTC)
+                position_ts = position.timestamp
+                if position_ts.tzinfo is None:
+                    position_ts = position_ts.replace(tzinfo=UTC)
+                else:
+                    position_ts = position_ts.astimezone(UTC)
+
+                age_hours = (datetime.now(UTC) - position_ts).total_seconds() / 3600
                 if age_hours > 168:  # 1 week
                     return {
                         "valid": False,

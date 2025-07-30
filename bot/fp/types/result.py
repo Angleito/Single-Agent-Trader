@@ -37,13 +37,13 @@ class Result[T, E]:
     def success(self) -> T:
         """Get success value - only valid for Success instances."""
         if isinstance(self, Success):
-            return self._value
+            return self._value  # type: ignore[no-any-return]
         raise ValueError("Cannot get success value from Failure")
 
     def failure(self) -> E:
         """Get failure value - only valid for Failure instances."""
         if isinstance(self, Failure):
-            return self._error
+            return self._error  # type: ignore[no-any-return]
         raise ValueError("Cannot get failure value from Success")
 
     def map(self, func: Callable[[T], U]) -> "Result[U, E]":
@@ -91,12 +91,12 @@ class Failure(Result[T, E]):
 
 
 # Type aliases for convenience
-def Ok[T](value: T) -> Success[T, E]:
+def Ok[T, E](value: T) -> Success[T, E]:
     """Create a success result."""
     return Success(value)
 
 
-def Err[E](error: E) -> Failure[T, E]:
+def Err[T, E](error: E) -> Failure[T, E]:
     """Create a failure result."""
     return Failure(error)
 

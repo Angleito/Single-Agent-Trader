@@ -7,22 +7,16 @@ import os
 from collections import deque
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import Any, Literal, cast
 
-import aiohttp
 import websockets
 
 from bot.config import settings
 from bot.data.base_market_provider import AbstractMarketDataProvider
 from bot.trading_types import MarketData
 from bot.utils.price_conversion import (
-    convert_candle_data,
     convert_from_18_decimal,
-    convert_ticker_price,
 )
-
-if TYPE_CHECKING:
-    from websockets.client import WebSocketClientProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -296,7 +290,9 @@ class BluefinMarketDataProvider(AbstractMarketDataProvider):
 
         # Calculate start time based on interval and limit
         interval_seconds = self._interval_to_seconds(granularity)
-        default_start = end_time - timedelta(seconds=interval_seconds * self.candle_limit)
+        default_start = end_time - timedelta(
+            seconds=interval_seconds * self.candle_limit
+        )
         start_time = start_time or default_start
 
         logger.info(
@@ -320,11 +316,13 @@ class BluefinMarketDataProvider(AbstractMarketDataProvider):
 
         try:
             url = f"{self._api_base_url}/marketData/candles"
-            
+
             params = {
                 "symbol": self.symbol,
                 "interval": api_granularity,
-                "startTime": int(start_time.timestamp() * 1000),  # Bluefin uses milliseconds
+                "startTime": int(
+                    start_time.timestamp() * 1000
+                ),  # Bluefin uses milliseconds
                 "endTime": int(end_time.timestamp() * 1000),
                 "limit": min(self.candle_limit, 1000),  # Bluefin max limit
             }
@@ -340,7 +338,7 @@ class BluefinMarketDataProvider(AbstractMarketDataProvider):
                     )
 
                 data = await response.json()
-                
+
                 # Bluefin returns data in different format
                 candles = data if isinstance(data, list) else data.get("data", [])
 
@@ -402,10 +400,14 @@ class BluefinMarketDataProvider(AbstractMarketDataProvider):
                     return self.get_latest_price()  # Fall back to cached data
 
                 data = await response.json()
-                
+
                 # Bluefin ticker format
-                ticker_data = data if not isinstance(data, dict) or "data" not in data else data["data"]
-                
+                ticker_data = (
+                    data
+                    if not isinstance(data, dict) or "data" not in data
+                    else data["data"]
+                )
+
                 if ticker_data:
                     # Convert from 18 decimal format
                     price_raw = ticker_data.get("lastPrice") or ticker_data.get("price")
@@ -427,8 +429,12 @@ class BluefinMarketDataProvider(AbstractMarketDataProvider):
         Establish WebSocket connection to Bluefin.
         """
         # Choose WebSocket endpoint based on data mode
-        ws_url = self._ws_url if not self.use_trade_aggregation else self._notification_ws_url
-        
+        ws_url = (
+            self._ws_url
+            if not self.use_trade_aggregation
+            else self._notification_ws_url
+        )
+
         # Build subscription message
         if self.use_trade_aggregation:
             # Subscribe to trades for aggregation
@@ -494,9 +500,7 @@ class BluefinMarketDataProvider(AbstractMarketDataProvider):
                 except Exception:
                     logger.exception("Error handling WebSocket message")
 
-    async def _handle_websocket_message(
-        self, message: dict[str, Any]
-    ) -> None:
+    async def _handle_websocket_message(self, message: dict[str, Any]) -> None:
         """
         Handle incoming WebSocket messages from Bluefin.
 
@@ -507,9 +511,13 @@ class BluefinMarketDataProvider(AbstractMarketDataProvider):
         channel = message.get("channel")
 
         if msg_type == "subscribed":
-            logger.info("Successfully subscribed to Bluefin WebSocket channel: %s", channel)
+            logger.info(
+                "Successfully subscribed to Bluefin WebSocket channel: %s", channel
+            )
         elif msg_type == "error":
-            logger.error("Bluefin WebSocket error: %s", message.get("error", "Unknown error"))
+            logger.error(
+                "Bluefin WebSocket error: %s", message.get("error", "Unknown error")
+            )
         elif channel == "trades" and self.use_trade_aggregation:
             await self._handle_trade_message(message)
         elif channel == "candles" and not self.use_trade_aggregation:
@@ -526,11 +534,11 @@ class BluefinMarketDataProvider(AbstractMarketDataProvider):
         """
         try:
             data = message.get("data", {})
-            
+
             # Convert price from 18 decimal format
             price = convert_from_18_decimal(data.get("price", "0"))
             size = convert_from_18_decimal(data.get("size", "0"))
-            
+
             trade_data = {
                 "price": price,
                 "size": size,
@@ -556,14 +564,16 @@ class BluefinMarketDataProvider(AbstractMarketDataProvider):
 
             # Add to tick buffer for aggregation
             self._tick_buffer.append(trade_data)
-            
+
             # Update price cache
             self._price_cache["price"] = price
             self._cache_timestamps["price"] = datetime.now(UTC)
 
             # Trigger candle building if needed
             if self._candle_builder_task is None or self._candle_builder_task.done():
-                self._candle_builder_task = asyncio.create_task(self._build_candles_from_trades())
+                self._candle_builder_task = asyncio.create_task(
+                    self._build_candles_from_trades()
+                )
 
         except Exception:
             logger.exception("Error handling Bluefin trade message")
@@ -577,13 +587,16 @@ class BluefinMarketDataProvider(AbstractMarketDataProvider):
         """
         try:
             data = message.get("data", {})
-            
+
             # Parse candle data
             candle = self._parse_bluefin_candle(data)
-            
+
             if self._validate_market_data(candle):
                 # Update or add candle to cache
-                if self._ohlcv_cache and self._ohlcv_cache[-1].timestamp == candle.timestamp:
+                if (
+                    self._ohlcv_cache
+                    and self._ohlcv_cache[-1].timestamp == candle.timestamp
+                ):
                     # Update existing candle
                     self._ohlcv_cache[-1] = candle
                 else:
@@ -591,7 +604,7 @@ class BluefinMarketDataProvider(AbstractMarketDataProvider):
                     self._ohlcv_cache.append(candle)
                     # Maintain cache limit
                     if len(self._ohlcv_cache) > self.candle_limit:
-                        self._ohlcv_cache = self._ohlcv_cache[-self.candle_limit:]
+                        self._ohlcv_cache = self._ohlcv_cache[-self.candle_limit :]
 
                 # Update price cache
                 self._price_cache["price"] = candle.close
@@ -627,7 +640,7 @@ class BluefinMarketDataProvider(AbstractMarketDataProvider):
 
             # Get interval in seconds
             interval_seconds = self._interval_to_seconds(self.interval)
-            
+
             # Group trades by interval
             current_time = datetime.now(UTC)
             interval_start = current_time.replace(microsecond=0)
@@ -645,7 +658,7 @@ class BluefinMarketDataProvider(AbstractMarketDataProvider):
                 # Build candle from trades
                 prices = [t["price"] for t in trades_in_interval]
                 volumes = [t["size"] for t in trades_in_interval]
-                
+
                 candle = MarketData(
                     symbol=self.symbol,
                     timestamp=interval_start,
@@ -658,7 +671,10 @@ class BluefinMarketDataProvider(AbstractMarketDataProvider):
 
                 if self._validate_market_data(candle):
                     # Update or add candle to cache
-                    if self._ohlcv_cache and self._ohlcv_cache[-1].timestamp == candle.timestamp:
+                    if (
+                        self._ohlcv_cache
+                        and self._ohlcv_cache[-1].timestamp == candle.timestamp
+                    ):
                         # Update existing candle
                         self._ohlcv_cache[-1] = candle
                     else:
@@ -666,7 +682,7 @@ class BluefinMarketDataProvider(AbstractMarketDataProvider):
                         self._ohlcv_cache.append(candle)
                         # Maintain cache limit
                         if len(self._ohlcv_cache) > self.candle_limit:
-                            self._ohlcv_cache = self._ohlcv_cache[-self.candle_limit:]
+                            self._ohlcv_cache = self._ohlcv_cache[-self.candle_limit :]
 
                     # Notify subscribers
                     await self._notify_subscribers(candle)
@@ -686,10 +702,18 @@ class BluefinMarketDataProvider(AbstractMarketDataProvider):
         """
         # Bluefin uses seconds for interval
         seconds = self._interval_to_seconds(interval)
-        
+
         # Bluefin supported intervals (in seconds)
-        supported = [60, 300, 900, 1800, 3600, 14400, 86400]  # 1m, 5m, 15m, 30m, 1h, 4h, 1d
-        
+        supported = [
+            60,
+            300,
+            900,
+            1800,
+            3600,
+            14400,
+            86400,
+        ]  # 1m, 5m, 15m, 30m, 1h, 4h, 1d
+
         # Find closest supported interval
         if seconds not in supported:
             closest = min(supported, key=lambda x: abs(x - seconds))
@@ -701,7 +725,7 @@ class BluefinMarketDataProvider(AbstractMarketDataProvider):
                     closest,
                 )
             return str(closest)
-        
+
         return str(seconds)
 
     def _parse_bluefin_candle(self, candle_data: dict[str, Any]) -> MarketData:
@@ -718,8 +742,8 @@ class BluefinMarketDataProvider(AbstractMarketDataProvider):
         return MarketData(
             symbol=self.symbol,
             timestamp=datetime.fromtimestamp(
-                int(candle_data.get("time", candle_data.get("timestamp", 0))) / 1000, 
-                tz=UTC
+                int(candle_data.get("time", candle_data.get("timestamp", 0))) / 1000,
+                tz=UTC,
             ),
             open=convert_from_18_decimal(candle_data.get("open", "0")),
             high=convert_from_18_decimal(candle_data.get("high", "0")),
